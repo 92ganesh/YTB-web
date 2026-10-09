@@ -141,6 +141,11 @@ public class AdBlockClient extends WebViewClient {
         return super.shouldInterceptRequest(view, url);
     }
 
+    // v3 FIX (your bug report): guard document.head (redirect stubs have no
+    // head yet -> old code crashed before injecting ANYTHING, killing skip +
+    // title push too). Wider skip selectors for 2026 markup. Mute+seek past
+    // unskippable ads via the <video> element. See body below.
+
     // DOM layer (belt + suspenders): after each page loads, inject CSS hiding +
     // skip-button clicking + title/state push, so overlay ads served from
     // youtube.com itself (which we must NOT block) still die, AND the
@@ -150,28 +155,47 @@ public class AdBlockClient extends WebViewClient {
     public void onPageFinished(WebView view, String url) {
         super.onPageFinished(view, url);
         String js = "(function(){"
-                // 1) hide known ad containers (same selectors as your web app)
+                + "try{"
+                // 1) hide ad containers (head-null-safe for redirect stubs)
                 + "var css='.ytp-ad-module,.video-ads,.ytp-ad-overlay-container,"
-                + ".ytp-ad-text-overlay,#player-ads{display:none!important}';"
+                + ".ytp-ad-text-overlay,.ytp-ad-player-overlay,#player-ads,"
+                + ".ad-container,.ad-div,.masthead-ad{display:none!important}';"
+                + "if(document.head){"
                 + "var st=document.createElement('style');"
-                + "st.textContent=css;document.head.appendChild(st);"
-                // 2) auto-click Skip buttons every second (like a watchdog)
+                + "st.textContent=css;document.head.appendChild(st);}"
+                // 2) one watchdog per page (guard: iframes re-fire onPageFinished)
                 + "if(!window._ytbSkip){window._ytbSkip=setInterval(function(){"
-                + "var b=document.querySelector('.ytp-ad-skip-button,.ytp-skip-ad-button');"
-                + "if(b){b.click();}"
+                + "try{"
+                // 2a) click ANY skip button (2026 markup has many variants)
+                + "var b=document.querySelector('.ytp-ad-skip-button,.ytp-skip-ad-button,"
+                + ".ytp-ad-skip-button-modern,.ytp-skip-ad-button-modern,"
+                + "button[class*=\"skip\" i],div[class*=\"skip\" i]');"
+                + "if(b&&(b.offsetParent!==null)){b.click();}"
+                // 2b) unskippable ad? Same <video> plays it: ad badge + short clip.
+                + "var adBadge=document.querySelector('.ytp-ad-text,.ytp-ad-duration-remaining,"
+                + ".ytp-ad-player-overlay,[class*=\"ad-showing\" i]');"
+                + "var v=document.querySelector('#movie_player video,video');"
+                + "if(adBadge&&v&&isFinite(v.duration)&&v.duration>0&&v.duration<120){"
+                + "try{v.muted=true;}catch(e){}"
+                + "try{if(v.currentTime<v.duration-1.5){v.currentTime=v.duration-0.5;}}catch(e){}"
+                + "}"
                 // 3) push title + playing state to Java (fills notification!)
                 + "try{"
-                + "var v=document.querySelector('video');"
-                + "if(window.YtbNative){window.YtbNative.pushState(document.title,!!v&&!v.paused);}"
+                + "var vv=document.querySelector('#movie_player video,video');"
+                + "if(window.YtbNative){window.YtbNative.pushState(document.title,!!vv&&!vv.paused);}"
+                + "}catch(e){}"
                 + "}catch(e){}"
                 + "},1000);}"
                 // 4) immediate first push (no 1s wait)
                 + "try{"
-                + "var v0=document.querySelector('video');"
+                + "var v0=document.querySelector('#movie_player video,video');"
                 + "if(window.YtbNative){window.YtbNative.pushState(document.title,!!v0&&!v0.paused);}"
                 + "}catch(e){}"
+                + "}catch(e){}"
                 + "})();";
-        view.evaluateJavascript(js, null); // like invoking a script engine
+        try {
+            view.evaluateJavascript(js, null); // like invoking a script engine
+        } catch (Exception ignored) { }
         if (listener != null) {
             try {
                 listener.onPageChanged(url, view.getTitle());

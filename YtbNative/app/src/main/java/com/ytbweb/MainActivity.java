@@ -5,6 +5,8 @@ import android.content.Intent;
 import android.content.Context;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.webkit.WebSettings;
 
 /* ============================================================================
@@ -125,14 +127,84 @@ public class MainActivity extends Activity {
         }
     }
 
+    // 3-dot menu (no XML needed): Home / Diagnostics / Desktop-site toggle.
+    // JAVA: like building a JMenuBar in code instead of a .form file.
+    private static final int MENU_HOME = 1;
+    private static final int MENU_DIAG = 2;
+    private static final int MENU_DESKTOP = 3;
+    private boolean desktopMode = false;
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        menu.add(0, MENU_HOME, 0, "Home");
+        menu.add(0, MENU_DIAG, 1, "YTB Diagnostics");
+        menu.add(0, MENU_DESKTOP, 2, "Desktop site: OFF");
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (webView == null) return super.onOptionsItemSelected(item);
+        int id = item.getItemId();
+        if (id == MENU_HOME) {
+            webView.loadUrl(HOME_URL);
+            return true;
+        } else if (id == MENU_DIAG) {
+            // diag.html is bundled? No — served from DEV server in dev mode.
+            // In FINAL mode copy diag.html to assets/www too (see README).
+            webView.loadUrl(USE_DEV_PAGE ? DEV_URL + "/diag.html"
+                    : "http://192.168.1.35:8000/diag.html");
+            return true;
+        } else if (id == MENU_DESKTOP) {
+            // Desktop UA = youtube.com desktop layout (some users prefer it;
+            // desktop markup uses different ad selectors — tell me if used).
+            desktopMode = !desktopMode;
+            WebSettings s = webView.getSettings();
+            s.setUserAgentString(desktopMode
+                    ? "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 "
+                      + "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+                    : null); // null = back to WebView default (mobile)
+            item.setTitle("Desktop site: " + (desktopMode ? "ON" : "OFF"));
+            webView.reload();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
     // Fired on page finish + title/URL change: update model + notification.
-    // Debounced to ~1/sec (YouTube fires many events per navigation).
+    // v3: ALSO hooks the <video> element directly (play/pause/ended events
+    // push instantly — no waiting for the 1/sec debounce). This is what makes
+    // the notification appear the moment a video starts, and flip Pause/Play.
     void onWebPageChanged(String url, String title) {
         nowPlaying.onUrl(url); // video ID + thumbnail URL (fallback path)
+        hookVideoEvents();     // media listeners (idempotent per page)
         long now = System.currentTimeMillis();
         if (now - lastUpdateSent < 1000) return;
         lastUpdateSent = now;
         pushToService(title);
+    }
+
+    // Attach play/pause/ended listeners to the page's <video> (once per page).
+    // JAVA: addEventListener("play", cb) = button.addActionListener(cb), but
+    // for media events. Callbacks run on a background thread — posting the
+    // service intent from there is fine (like sending from any thread).
+    private void hookVideoEvents() {
+        if (webView == null) return;
+        final String hook =
+                "(function(){"
+                + "var v=document.querySelector('#movie_player video,video');"
+                + "if(!v||v._ytbHooked||!window.YtbNative)return;"
+                + "v._ytbHooked=true;"
+                + "var push=function(){"
+                + "try{window.YtbNative.pushState(document.title,!v.paused);}catch(e){}};"
+                + "v.addEventListener('play',push);"
+                + "v.addEventListener('pause',push);"
+                + "v.addEventListener('ended',push);"
+                + "push();"
+                + "})();";
+        try {
+            webView.evaluateJavascript(hook, null);
+        } catch (Exception ignored) { }
     }
 
     // Send current model -> PlaybackService (which re-posts the notification).

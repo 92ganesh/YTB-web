@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<!-- ============================================================================
+  Diag page: answers "why did the ad/notification fail?" ON THE PHONE ITSELF.
+  JAVA ANALOGY: a /health + /debug endpoint page. It probes the live YouTube
+  DOM and reports pass/fail per subsystem, so you never need logcat/PC.
+  Open from the app: the native shell adds a menu entry "YTB Diagnostics".
+  (Also reachable at DEV http://192.168.1.35:8000/diag.html during dev.)
+============================================================================= -->
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>YTB Diagnostics</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #0f0f0f; color: #f1f1f1; padding: 12px; }
+  .card { background: #212121; border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+  .ok { color: #4caf50; font-weight: bold; }
+  .bad { color: #ff5252; font-weight: bold; }
+  button { padding: 10px 14px; border: 0; border-radius: 8px; background: #1a3a5a; color: #fff; font-weight: bold; margin: 4px 4px 4px 0; }
+  code { background: #000; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+  li { margin-bottom: 6px; font-size: 14px; }
+</style>
+</head>
+<body>
+<h2>YTB Diagnostics</h2>
+
+<div class="card">
+  <h3>1. Notification pipeline (title / thumbnail / buttons)</h3>
+  <ul id="notifChecks"><li>Press "Run checks" below.</li></ul>
+  <button onclick="checkNotif()">Run checks</button>
+</div>
+
+<div class="card">
+  <h3>2. Ad-block layers (network / CSS / skip / seek)</h3>
+  <ul id="adChecks"><li>Press "Run checks" below.</li></ul>
+  <button onclick="checkAds()">Run checks</button>
+</div>
+
+<div class="card">
+  <h3>3. "Same-host ads" — what that means (your question)</h3>
+  <p>Think of <code>youtube.com</code> as one apartment building:</p>
+  <ul>
+    <li><b>Different-building ads</b> (DoubleClick, Innovid…): our firewall
+      blocks the whole building. Video loads, ad never downloads. ✅</li>
+    <li><b>Same-building ads</b>: YouTube serves the ad <i>video itself</i>
+      from <code>youtube.com / googlevideo.com</code> — the SAME building the
+      real video lives in. Blocking the building kills your video too, so we
+      can't firewall it. Instead: hide its frame (CSS), click Skip (watchdog),
+      or mute + jump past it (seek). Your 2 back-to-back unskippable ads were
+      these — that's why no Skip button existed to click.</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h3>4. Logcat without a PC (your "how do I get ad hosts" question)</h3>
+  <p>You don't need <code>adb logcat</code> anymore. This app now has an
+  <b>on-device log</b>:</p>
+  <ul>
+    <li>Every blocked request is tagged <code>ADBLOCK blocked: &lt;url&gt;</code>.</li>
+    <li>Ask me for the <b>"Send debug log"</b> build and the app will add a
+    Share button exporting the last 500 blocked URLs as text — you paste it
+    here, I add the missing hosts, rebuild.</li>
+    <li>Shortcut for now: when an ad plays, note the video title + time, tell
+    me, and I'll walk you through the no-PC capture.</li>
+  </ul>
+</div>
+
+<script>
+// Checks run against the LIVE YouTube page (open diag inside the app's
+// WebView via the menu). Each check = one subsystem's health probe.
+function li(ok, text) {
+  return '<li><span class="' + (ok ? 'ok">PASS' : 'bad">FAIL') + '</span> — ' + text + '</li>';
+}
+function checkNotif() {
+  const out = [];
+  // Bridge present? (If no, title can never reach Java.)
+  out.push(li(!!window.YtbNative, 'JS bridge <code>window.YtbNative</code> present'));
+  // Watchdog alive?
+  out.push(li(!!window._ytbSkip, 'skip/title watchdog <code>_ytbSkip</code> running'));
+  // Video element found?
+  const vids = document.querySelectorAll('video').length;
+  const hooked = !!document.querySelector('#movie_player video,video');
+  out.push(li(vids > 0, 'video elements on page: <code>' + vids + '</code>'));
+  out.push(li(hooked, 'player video hookable (<code>#movie_player video</code>)'));
+  // Title sane?
+  const t = (document.title || '').replace(/\s*-\s*YouTube\s*$/, '');
+  out.push(li(t.length > 3, 'page title readable: <code>' + t.slice(0, 60) + '</code>'));
+  document.getElementById('notifChecks').innerHTML = out.join('');
+}
+function checkAds() {
+  const out = [];
+  // CSS layer injected?
+  const css = Array.from(document.querySelectorAll('style')).some(s => s.textContent.includes('ytp-ad-module'));
+  out.push(li(css, 'ad-hiding CSS injected'));
+  // Skip button state right now?
+  const skip = document.querySelector('.ytp-ad-skip-button,.ytp-skip-ad-button,.ytp-ad-skip-button-modern');
+  out.push(li(!skip, skip ? 'skip button VISIBLE (watchdog should click it)' : 'no skip button on screen right now'));
+  // Ad badge state right now?
+  const badge = document.querySelector('.ytp-ad-text,.ytp-ad-duration-remaining,.ytp-ad-player-overlay');
+  out.push(li(!badge, badge ? 'AD BADGE present (mute+seek layer should be working)' : 'no ad badge on screen right now'));
+  // Video duration sanity (unskippable-seek only acts on clips < 120s with badge)
+  const v = document.querySelector('#movie_player video,video');
+  out.push(li(!!v, v ? 'player duration: <code>' + Math.round(v.duration || 0) + 's</code>' : 'no player video found'));
+  document.getElementById('adChecks').innerHTML = out.join('');
+}
+</script>
+</body>
+</html>
