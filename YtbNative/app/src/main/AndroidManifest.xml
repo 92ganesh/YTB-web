@@ -26,6 +26,15 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- SUGGESTED VIDEOS: make us a share target. In any app
+                 (Chrome, WhatsApp, YouTube app) tap Share -> YTB Web and the
+                 video opens here, ad-free + background-ready. Like registering
+                 a file association / intent handler in web.xml. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
 
         <!-- Background service: the persistent notification player -->
@@ -34,12 +43,13 @@
             android:foregroundServiceType="mediaPlayback"
             android:exported="false" />
 
-        <!-- Lock-screen / notification play-pause button handler -->
+        <!-- Lock-screen / notification buttons (play-pause + next-track) -->
         <receiver
             android:name=".ActionReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.ytbweb.TOGGLE" />
+                <action android:name="com.ytbweb.NEXT" />
             </intent-filter>
         </receiver>
 

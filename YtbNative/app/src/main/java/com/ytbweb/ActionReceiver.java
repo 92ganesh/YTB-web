@@ -5,20 +5,29 @@ import android.content.Context;
 import android.content.Intent;
 
 /* ============================================================================
-  ActionReceiver.java - NOTIFICATION BUTTON HANDLER (lock-screen controls)
+  ActionReceiver.java - NOTIFICATION BUTTON HANDLERS (lock-screen controls)
   ----------------------------------------------------------------------------
-  JAVA ANALOGY: an ActionListener registered on the notification's Pause/Play
-  button. When tapped, Android delivers ACTION_TOGGLE here (even with the
-  screen locked), and we forward it to the WebView's own play/pause button.
-  Declared in AndroidManifest.xml with an <intent-filter> for com.ytbweb.TOGGLE.
+  JAVA ANALOGY: ActionListeners on the notification's Pause/Play buttons.
+  Android delivers the action here even with the screen locked; we forward to
+  MainActivity, which drives YouTube's own <video> element via JavaScript.
+  Declared in AndroidManifest.xml with <intent-filter> for TOGGLE + NEXT.
 ============================================================================= */
 public class ActionReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context context, Intent intent) {
-        if (PlaybackService.ACTION_TOGGLE.equals(intent.getAction())) {
-            // Clicks the page's #playPauseBtn via JS (see MainActivity).
-            MainActivity.toggleFromNotification(context);
+        if (intent == null || intent.getAction() == null) return;
+        switch (intent.getAction()) {
+            case PlaybackService.ACTION_TOGGLE:
+                // Pause/Play the actual YouTube video (works locked).
+                MainActivity.toggleFromNotification(context);
+                break;
+            case PlaybackService.ACTION_NEXT:
+                // Naive next: history-forward else reload (honest v1).
+                MainActivity.nextFromNotification(context);
+                break;
+            default:
+                break; // unknown action: ignore (like default: in switch)
         }
     }
 }
