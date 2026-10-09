@@ -47,9 +47,14 @@ jobs:
           # apt's 'gradle' is ANCIENT (v4, predates dependencyResolutionManagement
           # which needs 6.8+), so download the real Gradle 8.7 binary instead.
           # JAVA: like refusing a Java 6 javac and fetching JDK 17 manually.
+          # NOTE: services.gradle.org 307-redirects to github releases; curl
+          # without -L saves the redirect HTML (169 bytes, "not a zipfile").
+          # We use the final github URL directly + fail fast (-fS) + retry.
           if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
             cd /tmp
-            curl -sS -o gradle.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip
+            rm -f gradle.zip
+            curl -fSL --retry 3 -o gradle.zip https://github.com/gradle/gradle-distributions/releases/download/v8.7.0/gradle-8.7-bin.zip
+            unzip -t -q gradle.zip > /dev/null
             sudo mkdir -p /opt/gradle && sudo unzip -q -o gradle.zip -d /opt/gradle
             /opt/gradle/gradle-8.7/bin/gradle wrapper --gradle-version 8.7 -p "$GITHUB_WORKSPACE/YtbNative"
             cd "$GITHUB_WORKSPACE/YtbNative"
