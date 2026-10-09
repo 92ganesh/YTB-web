@@ -16,9 +16,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Set up Android SDK (manual - setup-android@v3 is broken: it calls
-        # removed 'tools' package on new cmdline-tools, failing every build)
+      - name: Set up Android SDK (manual install)
         run: |
+          # setup-android@v3 is broken: it calls the long-removed 'tools'
+          # package on new cmdline-tools, failing every build. So we install
+          # by hand (like setting JAVA_HOME manually vs broken installer).
           # JAVA: like downloading the JDK + setting JAVA_HOME by hand instead
           # of trusting a broken installer script. We fetch cmdline-tools,
           # then install exactly: platform-tools, android-34 platform,
