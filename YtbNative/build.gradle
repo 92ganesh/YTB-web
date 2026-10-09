@@ -1,0 +1,6 @@
+// Top-level Gradle build file.
+// JAVA ANALOGY: like a parent pom.xml — declares plugin versions once so all
+// modules inherit them. Cloud builder (GitHub Actions) reads this first.
+plugins {
+    id 'com.android.application' version '8.5.2' apply false
+}

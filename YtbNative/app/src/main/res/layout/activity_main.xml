@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Single full-screen WebView = the whole UI.
+     JAVA ANALOGY: one JFrame containing one giant JEditorPane that renders
+     your index.html. No native buttons — all UI comes from your web files. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- com.ytbweb.KeepAliveWebView: top-level class holding the visibility hack.
+         Must match the class name exactly or findViewById crashes. -->
+    <com.ytbweb.KeepAliveWebView
+        android:id="@+id/webview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+</FrameLayout>

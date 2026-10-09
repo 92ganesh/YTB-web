@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<!-- ============================================================================
+  index.html - THE ENTRY POINT
+  ----------------------------------------------------------------------------
+  JAVA ANALOGY:
+  Think of this file like your `public class Main { public static void main() }`
+  in Java. When a user opens the app, the browser looks for index.html FIRST,
+  just like the JVM looks for main() FIRST. This file does NOT contain logic -
+  it only DECLARES the structure (like a JFrame layout) and LINKS the other
+  two files: styles.css (the look) and app.js (the behavior).
+
+  MONOLITHIC STRUCTURE (per your rules - no scalable frameworks):
+  /YTB Web/
+    |- index.html  <-- You are here (View / Layout, like Java Swing XML)
+    |- styles.css  <-- All styling (like a single .properties theme file)
+    |- app.js      <-- All logic (like a single Controller.java class)
+============================================================================= -->
+<html lang="en">
+<head>
+  <!-- Required for mobile browsers: tells phone "this page is mobile-ready" -->
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f0f0f" />
+  <title>YTB Web - Personal Player</title>
+
+  <!-- JAVA ANALOGY: Like `import styles.css;` - single stylesheet, no Tailwind -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ================= HEADER (like a Java JMenuBar) ================= -->
+  <header class="app-header">
+    <div class="logo">▶ YTB Web</div>
+    <!-- Login area: shows either Login button OR user email -->
+    <div id="authArea">
+      <!-- Filled by app.js: either login button or user info -->
+      <button id="loginBtn" class="btn-small">Login with Google</button>
+    </div>
+  </header>
+
+  <!-- ================= MAIN CONTENT (like JPanel) ================= -->
+  <main class="container">
+
+    <!-- Search / URL bar: paste any YouTube link or Video ID -->
+    <section class="card">
+      <label for="videoInput">Paste YouTube URL or Video ID</label>
+      <div class="row">
+        <input id="videoInput" type="text" placeholder="e.g. dQw4w9WgXcQ or https://youtu.be/..." />
+        <button id="loadBtn">Play</button>
+      </div>
+      <p class="hint">Try: <code>aqz-KE-bpKQ</code> (Big Buck Bunny test video)</p>
+    </section>
+
+    <!-- YouTube IFrame Player: the YouTube API injects an <iframe> here -->
+    <section class="card player-card">
+      <!-- JAVA ANALOGY: This empty div is like `JPanel playerPanel = new JPanel();`
+           We leave it empty and let the YouTube API fill it later, just like
+           you would add a component dynamically with panel.add(videoComponent). -->
+      <div id="player"></div>
+      <div id="nowPlaying" class="now-playing">No video loaded yet.</div>
+
+      <!-- Playback + Share + Background controls -->
+      <div class="controls">
+        <button id="playPauseBtn">Pause</button>
+        <button id="shareBtn">Share</button>
+      </div>
+      <!-- KEEP-AWAKE + FLOATING WINDOW (lock-screen help - app.js 4B).
+           JAVA ANALOGY: Keep-awake = "do not let the TV sleep while I watch".
+           Floating window = mini TV overlay that survives app-switching. -->
+      <div class="controls">
+        <button id="wakeBtn">Keep-awake: OFF</button>
+        <button id="pipBtn">Float</button>
+      </div>
+      <p id="bgModeLabel" class="hint">Video mode. Tip: Keep-awake ON stops auto-pause while screen is up.</p>
+    </section>
+
+    <!-- Watch History: rendered from localStorage by app.js -->
+    <section class="card">
+      <div class="row-between">
+        <h2>Watch History</h2>
+        <button id="clearHistoryBtn" class="btn-small btn-danger">Clear</button>
+      </div>
+      <!-- JAVA ANALOGY: Like a JList backed by an ArrayList<Video> model.
+           app.js re-renders this <ul> every time the history array changes. -->
+      <ul id="historyList"></ul>
+    </section>
+
+    <!-- Status messages (errors, share feedback, login state) -->
+    <p id="statusMsg" class="status"></p>
+
+  </main>
+
+  <footer class="footer">
+    <small>Single-file monolith • Background audio via Media Session API • Ads hidden via CSS + DOM observer</small>
+  </footer>
+
+  <!-- 1. Official YouTube IFrame API (must load BEFORE app.js) -->
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <!-- 2. Our logic (like the Controller class). `defer` = run after HTML parsed,
+        similar to calling controller.init() after the JFrame is built. -->
+  <script src="app.js" defer></script>
+</body>
+</html>

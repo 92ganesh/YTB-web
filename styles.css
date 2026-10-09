@@ -1,0 +1,141 @@
+/* ============================================================================
+  styles.css - THE SINGLE STYLESHEET
+  ----------------------------------------------------------------------------
+  JAVA ANALOGY:
+  Think of this file like a single `theme.properties` file in Java.
+  index.html says `class="card"` (like setName("card")), and THIS file says
+  what ".card" looks like (like UIManager.put("card", ...)). One file, no
+  Tailwind, no frameworks — pure standard CSS.
+
+  MOBILE-FIRST: Base styles target phones. The @media block at the bottom
+  only enlarges things on desktop, like an `if (screenWidth > 600)` check.
+============================================================================= */
+
+/* -- Color palette (like `public static final String BG = "#0f0f0f"`) -- */
+:root {
+  --bg: #0f0f0f;       /* YouTube dark background */
+  --card: #212121;     /* Slightly lighter panel */
+  --text: #f1f1f1;     /* Main text */
+  --muted: #aaa;       /* Secondary text */
+  --accent: #ff0000;   /* YouTube red */
+  --radius: 12px;
+}
+
+/* Reset + base font */
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* ================= HEADER (like a toolbar) ================= */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #000;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.logo { font-weight: 800; font-size: 18px; }
+
+/* ================= LAYOUT ================= */
+.container {
+  padding: 12px;
+  max-width: 640px; /* Phone width; centered on desktop */
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+.row { display: flex; gap: 8px; }
+.row-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+h2 { margin: 0 0 8px 0; font-size: 16px; }
+
+/* ================= INPUTS & BUTTONS ================= */
+input {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #444;
+  background: #121212;
+  color: var(--text);
+}
+button {
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-small { padding: 6px 10px; font-size: 13px; background: #3d3d3d; }
+.btn-danger { background: #5a1a1a; }
+.hint { color: var(--muted); font-size: 13px; }
+.hint code { background: #000; padding: 2px 6px; border-radius: 4px; }
+
+/* ================= PLAYER ================= */
+.player-card #player iframe,
+.player-card #player {
+  width: 100%;
+  aspect-ratio: 16 / 9; /* Keeps video 16:9 like YouTube, no math needed */
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.now-playing { margin-top: 8px; font-size: 14px; color: var(--muted); }
+.controls { display: flex; gap: 8px; margin-top: 10px; }
+.controls button { flex: 1; background: #3d3d3d; }
+#shareBtn { background: #0a5c36; } /* green = share action */
+#wakeBtn { background: #1a3a5a; } /* blue = keep-awake toggle */
+#pipBtn { background: #3d3d3d; flex: 0 0 90px; } /* narrow side button */
+#bgModeLabel { margin: 8px 0 0 0; }
+
+/* ================= HISTORY LIST ================= */
+#historyList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+#historyList li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #121212;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+#historyList button { background: #3d3d3d; padding: 6px 10px; }
+
+.status { min-height: 20px; color: var(--muted); font-size: 13px; text-align: center; }
+.footer { text-align: center; color: var(--muted); padding: 16px; font-size: 12px; }
+
+/* ============================================================================
+  BASIC AD-BLOCKER (CSS LAYER) — hides known YouTube ad containers.
+  JAVA ANALOGY: Like a firewall rule list: "if class name matches ad pattern,
+  set visible = false". The JS layer in app.js does the active skipping.
+============================================================================= */
+.ytp-ad-module,
+.video-ads,
+.ytp-ad-overlay-container,
+.ytp-ad-text-overlay,
+#player-ads,
+.ad-showing {
+  display: none !important;
+}
+
+/* Desktop enhancement only */
+@media (min-width: 700px) {
+  .container { padding: 20px; }
+}

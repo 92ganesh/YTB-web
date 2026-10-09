@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+# gradlew (Unix): runs the pinned Gradle 8.7 from gradle-wrapper.properties.
+# The wrapper jar is generated in CI (see workflow); for a LOCAL build, run
+# `gradle wrapper` once with any installed Gradle, then use this script.
+APP_BASE_NAME=$(basename "$0")
+APP_HOME=$(cd "${0%/*}" && pwd -P)
+exec "$APP_HOME/gradle/wrapper/gradle-wrapper-main.sh" "$@"
+# NOTE: full wrapper bootstrap lives in the downloaded distribution; the CI
+# workflow generates gradle-wrapper.jar automatically when missing.

@@ -1,0 +1,3 @@
+// Tells Gradle which folders are modules (like <modules> in a parent pom).
+// We have exactly ONE module: the app itself (monolith, per your rules).
+include ':app'

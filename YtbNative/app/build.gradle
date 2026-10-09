@@ -1,0 +1,34 @@
+// App module build config.
+// JAVA ANALOGY: like the <dependencies> + compiler settings of one Maven
+// module. minSdk 26 = Android 8+, covers ~95% of phones in 2026.
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.ytbweb'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.ytbweb'
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName '1.0.0'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// ZERO external libraries. Everything used (WebView, Service, Notification)
+// ships inside Android itself — like using only java.* + android.* imports.
+dependencies {
+}

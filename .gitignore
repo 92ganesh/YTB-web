@@ -1,0 +1,11 @@
+# Android / Gradle ignores (keeps the repo small; CI regenerates these)
+*.iml
+.gradle/
+local.properties
+.idea/
+.DS_Store
+app/build/
+app/release/
+YtbNative/app/build/
+**/build/
+gradle/wrapper/gradle-wrapper.jar

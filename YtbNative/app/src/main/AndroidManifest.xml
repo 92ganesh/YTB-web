@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- App manifest: declares permissions + components to Android OS.
+     JAVA ANALOGY: like web.xml for a servlet app — lists servlets (activities,
+     services, receivers) and required permissions before code runs. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Play YouTube streams + fetch pages -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Keep audio alive after screen locks (the background trick) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Load http://192.168.x.x during DEV (cleartext). Release/bundled mode
+         uses file:///android_asset so this is harmless there. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <application
+        android:label="YTB Web"
+        android:theme="@android:style/Theme.Material.NoActionBar"
+        android:usesCleartextTraffic="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|keyboardHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Background service: the persistent notification player -->
+        <service
+            android:name=".PlaybackService"
+            android:foregroundServiceType="mediaPlayback"
+            android:exported="false" />
+
+        <!-- Lock-screen / notification play-pause button handler -->
+        <receiver
+            android:name=".ActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.ytbweb.TOGGLE" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+</manifest>
