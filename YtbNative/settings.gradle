@@ -1,3 +1,21 @@
 // Tells Gradle which folders are modules (like <modules> in a parent pom).
 // We have exactly ONE module: the app itself (monolith, per your rules).
+//
+// pluginManagement + dependencyResolutionManagement = the <repositories>
+// section: WHERE to download the Android plugin + libraries from. Without
+// google() here, Gradle only checks its own plugin portal (which does NOT
+// host com.android.application) and fails exactly like your log shows.
+pluginManagement {
+    repositories {
+        google()          // Android Gradle Plugin lives here (mandatory)
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
 include ':app'
