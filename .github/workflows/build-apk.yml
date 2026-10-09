@@ -44,9 +44,15 @@ jobs:
           ANDROID_HOME: /usr/local/lib/android/sdk
         run: |
           export PATH=$PATH:/usr/local/lib/android/sdk/cmdline-tools/latest/bin:/usr/local/lib/android/sdk/platform-tools
+          # apt's 'gradle' is ANCIENT (v4, predates dependencyResolutionManagement
+          # which needs 6.8+), so download the real Gradle 8.7 binary instead.
+          # JAVA: like refusing a Java 6 javac and fetching JDK 17 manually.
           if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
-            sudo apt-get update -qq && sudo apt-get install -y -qq gradle > /dev/null
-            gradle wrapper --gradle-version 8.7
+            cd /tmp
+            curl -sS -o gradle.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip
+            sudo mkdir -p /opt/gradle && sudo unzip -q -o gradle.zip -d /opt/gradle
+            /opt/gradle/gradle-8.7/bin/gradle wrapper --gradle-version 8.7 -p "$GITHUB_WORKSPACE/YtbNative"
+            cd "$GITHUB_WORKSPACE/YtbNative"
           fi
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
