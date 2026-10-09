@@ -16,13 +16,32 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-      - name: Accept SDK licenses
-        run: yes | sdkmanager --licenses > /dev/null
+      - name: Set up Android SDK (manual - setup-android@v3 is broken: it calls
+        # removed 'tools' package on new cmdline-tools, failing every build)
+        run: |
+          # JAVA: like downloading the JDK + setting JAVA_HOME by hand instead
+          # of trusting a broken installer script. We fetch cmdline-tools,
+          # then install exactly: platform-tools, android-34 platform,
+          # build-tools 34.0.0. Versions pinned = reproducible builds.
+          sudo mkdir -p /usr/local/lib/android/sdk/cmdline-tools
+          cd /tmp
+          curl -sS -o cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          sudo unzip -q -o cmdtools.zip -d /usr/local/lib/android/sdk/cmdline-tools
+          sudo mv /usr/local/lib/android/sdk/cmdline-tools/cmdline-tools /usr/local/lib/android/sdk/cmdline-tools/latest
+          echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" | sudo tee -a /etc/environment > /dev/null
+          echo "ANDROID_HOME=/usr/local/lib/android/sdk" | sudo tee -a /etc/environment > /dev/null
+          export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
       - name: Build debug APK
         working-directory: YtbNative
+        env:
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+          ANDROID_HOME: /usr/local/lib/android/sdk
         run: |
+          export PATH=$PATH:/usr/local/lib/android/sdk/cmdline-tools/latest/bin:/usr/local/lib/android/sdk/platform-tools
           if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
             sudo apt-get update -qq && sudo apt-get install -y -qq gradle > /dev/null
             gradle wrapper --gradle-version 8.7
