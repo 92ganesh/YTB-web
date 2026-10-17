@@ -67,3 +67,20 @@ jobs:
           name: YTB-Web-debug-apk
           path: YtbNative/app/build/outputs/apk/debug/app-debug.apk
 
+      # Fresh-slate telemetry: every APK build archives the previous run's log
+      # (telemetry.log -> telemetry-<run>.log) so the next install starts from
+      # zero and old lines can never confuse a new diagnosis. Like rotating
+      # log files on each deploy (logrotate) — history kept, confusion gone.
+      - name: Rotate telemetry log
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          if [ -f telemetry.log ] && [ -s telemetry.log ]; then
+            TS=$(date -u +%Y%m%d-%H%M%S)
+            mkdir -p telemetry-history
+            mv telemetry.log "telemetry-history/telemetry-${TS}-run${{ github.run_number }}.log"
+            echo "Rotated previous telemetry log to telemetry-history/"
+          else
+            echo "No telemetry.log to rotate (first build or already fresh)."
+          fi
+          touch telemetry.log
+

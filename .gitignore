@@ -9,5 +9,9 @@ app/release/
 YtbNative/app/build/
 **/build/
 gradle/wrapper/gradle-wrapper.jar
-*.log
+# Telemetry history: archived per-build logs stay LOCAL (never pushed).
+# The live telemetry.log is git-ignored too (it rewrites every second while
+# the server runs — committing it would spam every git status).
 telemetry.log
+*.log
+telemetry-history/
