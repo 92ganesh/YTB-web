@@ -387,33 +387,33 @@ public class MainActivity extends Activity implements FullscreenHandler.Host {
     }
 
     // Called by ActionReceiver (notification pause/play button).
-    // Drives YouTube's own player API or clicks the video directly.
+    // m.youtube.com does NOT expose the embedded YouTube JS API (getPlayerState/playVideo).
+    // The only reliable toggle is clicking YouTube's own .ytp-play-button — same as a real tap.
     static void toggleFromNotification(Context ctx) {
         if (webView == null) return;
         // Must run on UI thread (like SwingUtilities.invokeLater).
         webView.post(() -> webView.evaluateJavascript(
                 "(function(){"
-                + "var p=document.getElementById('movie_player');"
-                + "if(p&&typeof p.getPlayerState==='function'){"
-                + "  var s=p.getPlayerState();"
-                + "  if(s===1){p.pauseVideo();return 'paused';}"
-                + "  else{p.playVideo();return 'playing';}"
-                + "}"
+                // First try: click YouTube's own play/pause button (most reliable)
+                + "var btn=document.querySelector('.ytp-play-button,.ytp-large-play-button');"
+                + "if(btn){btn.click();"
+                + "var v=document.querySelector('#movie_player video,video');"
+                + "return v&&!v.paused?'playing':'paused';}"
+                // Fallback: directly call play/pause on the video element
                 + "var vs=document.querySelectorAll('video');"
                 + "if(!vs.length)return 'no-video';"
                 + "var v=vs[0];"
                 + "for(var i=1;i<vs.length;i++){"
-                + "  if(vs[i].clientWidth*vs[i].clientHeight>v.clientWidth*v.clientHeight){v=vs[i];}"
+                + "if(vs[i].clientWidth*vs[i].clientHeight>v.clientWidth*v.clientHeight){v=vs[i];}"
                 + "}"
                 + "if(v.paused){v.play();return 'playing';}"
                 + "else{v.pause();return 'paused';}"
                 + "})();",
                 value -> {
-                    // value is "playing"/"paused" (quoted JSON string).
+                    // value is JSON-quoted "playing" or "paused"
                     boolean playing = value != null && value.contains("playing");
                     isPlaying = playing;
                     nowPlaying.playing = playing;
-                    // Refresh notification label immediately (no debounce).
                     if (ctx != null) {
                         Intent u = new Intent(ctx, PlaybackService.class);
                         u.setAction(PlaybackService.ACTION_UPDATE);

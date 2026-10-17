@@ -176,17 +176,29 @@ public class AdBlockClient extends WebViewClient {
                 + "var adBadge=document.querySelector('.ad-showing,.ad-interrupting,"
                 + ".ytp-ad-player-overlay,.ytp-ad-text,.ytp-ad-duration-remaining,[class*=\"ad-showing\" i]');"
                 + "var v=document.querySelector('#movie_player video,video');"
-                + "if(adBadge&&v){"
+                + "if(adBadge){"
+                + "try{if(window.YtbNative){window.YtbNative.pushState('__ad_visible',true);}}catch(e){}"
+                + "if(v){"
                 + "try{v.muted=true;v.playbackRate=16.0;}catch(e){}"
                 + "try{if(isFinite(v.duration)&&v.duration>0&&v.currentTime<v.duration-0.2){"
                 + "v.currentTime=v.duration-0.1;"
                 + "if(window.YtbNative){window.YtbNative.pushState('__ad_seek',true);}"
                 + "}}catch(e){}"
                 + "}"
-                // 2c) Kick any stalled state without waiting 4 seconds
-                + "if(!adBadge&&v&&v.paused&&v.currentTime>0){"
-                + "try{v.play();}catch(e){}"
                 + "}"
+                // 2c) Stall-kick: player stuck at readyState<3 for 500ms = ad assets blocked.
+                // MUST check currentTime<=0.5 (stall always starts at 0).
+                // v.currentTime>0 check was WRONG and caused the 4s black screen bug.
+                + "try{"
+                + "var pv=document.querySelector('#movie_player video,video');"
+                + "if(pv&&pv.readyState<3&&pv.currentTime<=0.5){"
+                + "if(!window._ytbStallT){window._ytbStallT=Date.now();}"
+                + "if(Date.now()-window._ytbStallT>500){"
+                + "try{pv.play();}catch(e){}"
+                + "if(window.YtbNative){window.YtbNative.pushState('__stall_kick',true);}"
+                + "window._ytbStallT=0;"
+                + "}}else{window._ytbStallT=0;}"
+                + "}catch(e){}"
                 // 3) Push title + playing state on change (dirty-check to avoid flooding)
                 + "var vv=document.querySelector('#movie_player video,video');"
                 + "var curP=!!vv&&!vv.paused;"
