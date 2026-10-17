@@ -52,7 +52,9 @@ public class FullscreenHandler extends WebChromeClient {
         customView = view;
         customCallback = callback;
         try {
-            host.browserView().setVisibility(View.GONE); // hide browser card
+            // NOTE: Keep browserView VISIBLE behind the overlay. Calling View.GONE
+            // on WebView halts media/video rendering in Chromium on modern Android.
+            // fullscreenContainer is an opaque black (#000000) frame that fully covers it.
             FrameLayout root = host.decorRoot();
             root.addView(customView, new FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
@@ -102,7 +104,6 @@ public class FullscreenHandler extends WebChromeClient {
         } catch (Exception ignored) { }
         customView = null;
         try {
-            host.browserView().setVisibility(View.VISIBLE); // show browser card
             host.activity().setRequestedOrientation(
                     android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
             showBars();

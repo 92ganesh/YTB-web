@@ -96,6 +96,11 @@ public class AdBlockClient extends WebViewClient {
 
     private boolean isAd(String url) {
         if (url == null) return false;
+        // Whitelist: never block the actual video stream, watch page, or thumbnails
+        if (url.contains("/videoplayback") || url.contains("m.youtube.com/watch")
+                || url.contains("i.ytimg.com") || url.contains("/api/stats/playback")) {
+            return false;
+        }
         String lower = url.toLowerCase();
         boolean hit = false;
         // 1) host suffix match.
@@ -144,16 +149,8 @@ public class AdBlockClient extends WebViewClient {
         return super.shouldInterceptRequest(view, url);
     }
 
-    // v3 FIX (your bug report): guard document.head (redirect stubs have no
-    // head yet -> old code crashed before injecting ANYTHING, killing skip +
-    // title push too). Wider skip selectors for 2026 markup. Mute+seek past
-    // unskippable ads via the <video> element. See body below.
-
-    // DOM layer (belt + suspenders): after each page loads, inject CSS hiding +
-    // skip-button clicking + title/state push, so overlay ads served from
-    // youtube.com itself (which we must NOT block) still die, AND the
-    // notification learns the video title without any API key.
-    // THEN notify MainActivity (url + title) for the notification update.
+    // DOM layer: inject CSS hiding + instant 150ms ad watchdog (skip button clicking,
+    // mute+speedup unskippable ads, recover stalled state, push state to notification).
     @Override
     public void onPageFinished(WebView view, String url) {
         super.onPageFinished(view, url);
@@ -166,53 +163,41 @@ public class AdBlockClient extends WebViewClient {
                 + "if(document.head){"
                 + "var st=document.createElement('style');"
                 + "st.textContent=css;document.head.appendChild(st);}"
-                // 2) one watchdog per page (guard: iframes re-fire onPageFinished)
+                // 2) Fast 150ms watchdog per page (instant ad-skip, zero black-screen stall)
                 + "if(!window._ytbSkip){window._ytbSkip=setInterval(function(){"
                 + "try{"
-                // 2a) click ANY skip button (2026 markup has many variants)
+                // 2a) click ANY skip button variant immediately
                 + "var b=document.querySelector('.ytp-ad-skip-button,.ytp-skip-ad-button,"
                 + ".ytp-ad-skip-button-modern,.ytp-skip-ad-button-modern,"
-                + "button[class*=\"skip\" i],div[class*=\"skip\" i]');"
+                + "button[class*=\"skip\" i],div[class*=\"skip\" i],[id*=\"skip-button\" i]');"
                 + "if(b&&(b.offsetParent!==null)){b.click();"
                 + "try{if(window.YtbNative){window.YtbNative.pushState('__skip_clicked',true);}}catch(e){}}"
-                // 2b) unskippable ad? Same <video> plays it: ad badge + short clip.
-                // v4: ALSO report mere PRESENCE every second (badge sighting),
-                // so the Mac log proves "ad is on screen right now" even when
-                // the badge markup changes and the seek misses. Sightings let
-                // us tune selectors without guessing.
-                + "var adBadge=document.querySelector('.ytp-ad-text,.ytp-ad-duration-remaining,"
-                + ".ytp-ad-player-overlay,[class*=\"ad-showing\" i]');"
+                // 2b) Ad active? Mute + 16x speedup + jump to end instantly
+                + "var adBadge=document.querySelector('.ad-showing,.ad-interrupting,"
+                + ".ytp-ad-player-overlay,.ytp-ad-text,.ytp-ad-duration-remaining,[class*=\"ad-showing\" i]');"
                 + "var v=document.querySelector('#movie_player video,video');"
-                + "if(adBadge){try{if(window.YtbNative){window.YtbNative.pushState('__ad_visible',true);}}catch(e){}}"
-                + "if(adBadge&&v&&isFinite(v.duration)&&v.duration>0&&v.duration<240){"
-                + "try{v.muted=true;}catch(e){}"
-                + "try{if(v.currentTime<v.duration-1.5){v.currentTime=v.duration-0.5;"
-                + "if(window.YtbNative){window.YtbNative.pushState('__ad_seek',true);}}}catch(e){}"
+                + "if(adBadge&&v){"
+                + "try{v.muted=true;v.playbackRate=16.0;}catch(e){}"
+                + "try{if(isFinite(v.duration)&&v.duration>0&&v.currentTime<v.duration-0.2){"
+                + "v.currentTime=v.duration-0.1;"
+                + "if(window.YtbNative){window.YtbNative.pushState('__ad_seek',true);}"
+                + "}}catch(e){}"
                 + "}"
-                // 2c) BLACK-SCREEN wait (your bug #1): video stalled at time 0
-                // with no badge and no skip button = ad assets blocked at
-                // network layer but player still waiting on them. Nudge it:
-                // a tiny seek kick-starts stalled players (like pressing
-                // >>| once). Bounded: only when duration unknown/short and
-                // playback hasn't progressed after page settled.
-                + "try{"
-                + "var pv=document.querySelector('#movie_player video,video');"
-                + "if(pv&&pv.readyState<3&&pv.currentTime<0.5){"
-                + "if(!window._ytbStallT){window._ytbStallT=Date.now();}"
-                + "if(Date.now()-window._ytbStallT>4000&&Date.now()-window._ytbStallT<30000){"
-                + "try{pv.play();}catch(e){}"
-                + "if(window.YtbNative){window.YtbNative.pushState('__stall_kick',true);}"
-                + "window._ytbStallT=0;"
-                + "}}else{window._ytbStallT=0;}"
-                + "}catch(e){}"
-                // 3) push title + playing state to Java (fills notification!)
-                + "try{"
+                // 2c) Kick any stalled state without waiting 4 seconds
+                + "if(!adBadge&&v&&v.paused&&v.currentTime>0){"
+                + "try{v.play();}catch(e){}"
+                + "}"
+                // 3) Push title + playing state on change (dirty-check to avoid flooding)
                 + "var vv=document.querySelector('#movie_player video,video');"
-                + "if(window.YtbNative){window.YtbNative.pushState(document.title,!!vv&&!vv.paused);}"
+                + "var curP=!!vv&&!vv.paused;"
+                + "var curT=document.title||'';"
+                + "if(window.YtbNative&&(curP!==window._ytbLastP||curT!==window._ytbLastT)){"
+                + "window._ytbLastP=curP;window._ytbLastT=curT;"
+                + "try{window.YtbNative.pushState(curT,curP);}catch(e){}"
+                + "}"
                 + "}catch(e){}"
-                + "}catch(e){}"
-                + "},1000);}"
-                // 4) immediate first push (no 1s wait)
+                + "},150);}"
+                // 4) immediate first push
                 + "try{"
                 + "var v0=document.querySelector('#movie_player video,video');"
                 + "if(window.YtbNative){window.YtbNative.pushState(document.title,!!v0&&!v0.paused);}"
@@ -220,7 +205,7 @@ public class AdBlockClient extends WebViewClient {
                 + "}catch(e){}"
                 + "})();";
         try {
-            view.evaluateJavascript(js, null); // like invoking a script engine
+            view.evaluateJavascript(js, null);
         } catch (Exception ignored) { }
         if (listener != null) {
             try {

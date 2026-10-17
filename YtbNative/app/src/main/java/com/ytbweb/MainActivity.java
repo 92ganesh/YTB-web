@@ -73,6 +73,14 @@ public class MainActivity extends Activity implements FullscreenHandler.Host {
         // activity_main.xml = one full-screen WebView (like new JFrame + add()).
         setContentView(R.layout.activity_main);
 
+        // Android 13+ (Pixel / API 33+): Request runtime notification permission so notification shows
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 101);
+            }
+        }
+
         webView = findViewById(R.id.webview);
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);      // YouTube needs this (default OFF)
@@ -286,6 +294,9 @@ public class MainActivity extends Activity implements FullscreenHandler.Host {
                         lastPushedVideoId = vid;
                         isPlaying = playing;
                         nowPlaying.playing = playing;
+                        if (curUrl != null) {
+                            nowPlaying.onUrl(curUrl);
+                        }
                         pushToService(title);
                     }
                 } catch (Exception ignored) { }
@@ -360,7 +371,9 @@ public class MainActivity extends Activity implements FullscreenHandler.Host {
     protected void onDestroy() {
         pollHandler.removeCallbacks(pollTask); // stop poller (avoid leaks)
         instance = null;
-        stopService(new Intent(this, PlaybackService.class));
+        // Do NOT call stopService here — Android destroys activities in the background
+        // to reclaim memory. PlaybackService must stay alive to keep playing audio!
+        // Swiping the app away from recent tasks is handled by PlaybackService.onTaskRemoved().
         super.onDestroy();
     }
 
@@ -374,20 +387,24 @@ public class MainActivity extends Activity implements FullscreenHandler.Host {
     }
 
     // Called by ActionReceiver (notification pause/play button).
-    // WORKS ON REAL YOUTUBE: clicks the biggest <video> element directly.
-    // (Old version clicked our custom page's #playPauseBtn — that page is
-    // gone as the home screen, so this now drives YouTube's own player.)
+    // Drives YouTube's own player API or clicks the video directly.
     static void toggleFromNotification(Context ctx) {
         if (webView == null) return;
         // Must run on UI thread (like SwingUtilities.invokeLater).
         webView.post(() -> webView.evaluateJavascript(
                 "(function(){"
+                + "var p=document.getElementById('movie_player');"
+                + "if(p&&typeof p.getPlayerState==='function'){"
+                + "  var s=p.getPlayerState();"
+                + "  if(s===1){p.pauseVideo();return 'paused';}"
+                + "  else{p.playVideo();return 'playing';}"
+                + "}"
                 + "var vs=document.querySelectorAll('video');"
                 + "if(!vs.length)return 'no-video';"
                 + "var v=vs[0];"
                 + "for(var i=1;i<vs.length;i++){"
-                + "if(vs[i].clientWidth*vs[i].clientHeight>"
-                + "v.clientWidth*v.clientHeight){v=vs[i];}}"
+                + "  if(vs[i].clientWidth*vs[i].clientHeight>v.clientWidth*v.clientHeight){v=vs[i];}"
+                + "}"
                 + "if(v.paused){v.play();return 'playing';}"
                 + "else{v.pause();return 'paused';}"
                 + "})();",
@@ -415,14 +432,19 @@ public class MainActivity extends Activity implements FullscreenHandler.Host {
                 }));
     }
 
-    // Called by ActionReceiver NEXT button: naive "next" = history forward.
-    // (True YouTube-up-next would need playlist parsing; forward-or-reload
-    // is the honest v1. Playlist/autoplay support can come later.)
+    // Called by ActionReceiver NEXT button: skips to the next YouTube video.
     static void nextFromNotification(Context ctx) {
         if (webView == null) return;
-        webView.post(() -> {
-            if (webView.canGoForward()) webView.goForward();
-            else webView.reload();
-        });
+        webView.post(() -> webView.evaluateJavascript(
+                "(function(){"
+                + "var p=document.getElementById('movie_player');"
+                + "if(p&&typeof p.nextVideo==='function'){p.nextVideo();return 'next-api';}"
+                + "var btn=document.querySelector('.ytp-next-button');"
+                + "if(btn){btn.click();return 'next-btn';}"
+                + "if(window.history&&window.history.forward){window.history.forward();return 'forward';}"
+                + "return 'none';"
+                + "})();",
+                null
+        ));
     }
 }

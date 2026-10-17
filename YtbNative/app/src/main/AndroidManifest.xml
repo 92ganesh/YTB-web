@@ -9,6 +9,8 @@
     <!-- Keep audio alive after screen locks (the background trick) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Android 13+ (Pixel / API 33+) notification permission: MANDATORY for notification banner -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Load http://192.168.x.x during DEV (cleartext). Release/bundled mode
          uses file:///android_asset so this is harmless there. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -21,7 +23,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden">
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

@@ -111,6 +111,12 @@ public class PlaybackService extends Service {
         PendingIntent togglePi = PendingIntent.getBroadcast(
                 this, 1, toggle, pendingFlags());
 
+        // Next button -> ActionReceiver (skips to next YouTube video).
+        Intent next = new Intent(this, ActionReceiver.class);
+        next.setAction(ACTION_NEXT);
+        PendingIntent nextPi = PendingIntent.getBroadcast(
+                this, 2, next, pendingFlags());
+
         String toggleLabel = playing ? "Pause" : "Play";
         int toggleIcon = playing
                 ? android.R.drawable.ic_media_pause
@@ -118,22 +124,30 @@ public class PlaybackService extends Service {
 
         Notification n;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            android.graphics.drawable.Icon toggleIconObj =
+                    android.graphics.drawable.Icon.createWithResource(this, toggleIcon);
             Notification.Action act = new Notification.Action.Builder(
-                    null, toggleLabel, togglePi).build();
+                    toggleIconObj, toggleLabel, togglePi).build();
+
+            android.graphics.drawable.Icon nextIconObj =
+                    android.graphics.drawable.Icon.createWithResource(this, android.R.drawable.ic_media_next);
+            Notification.Action nextAct = new Notification.Action.Builder(
+                    nextIconObj, "Next", nextPi).build();
+
             Notification.Builder b = new Notification.Builder(this, CHANNEL_ID)
                     .setContentTitle(trackTitle)
                     .setContentText(trackSubtitle)
                     .setSmallIcon(android.R.drawable.ic_media_play)
                     .setContentIntent(openPi)
                     .addAction(act)
+                    .addAction(nextAct)
+                    .setVisibility(Notification.VISIBILITY_PUBLIC)
                     .setOngoing(playing); // ongoing = swipe-proof while playing
             if (trackArt != null) b.setLargeIcon(trackArt); // video thumbnail!
-            // MediaStyle WITHOUT a MediaSession token still renders the media
-            // template (big art + lock-screen placement) on most ROMs. A null
-            // token is legal — setMediaSession(null) is simply skipped here.
-            // (Full MediaSession wiring is the v5 upgrade: real lock-screen
-            // transport controls driven by the OS instead of our receiver.)
-            b.setStyle(new Notification.MediaStyle());
+
+            Notification.MediaStyle mediaStyle = new Notification.MediaStyle();
+            mediaStyle.setShowActionsInCompactView(0, 1);
+            b.setStyle(mediaStyle);
             n = b.build();
         } else {
             Notification.Builder b = new Notification.Builder(this)
@@ -142,14 +156,18 @@ public class PlaybackService extends Service {
                     .setSmallIcon(android.R.drawable.ic_media_play)
                     .setContentIntent(openPi)
                     .addAction(toggleIcon, toggleLabel, togglePi)
+                    .addAction(android.R.drawable.ic_media_next, "Next", nextPi)
                     .setOngoing(playing);
             if (trackArt != null) b.setLargeIcon(trackArt);
             n = b.build();
         }
 
-        // THE call that grants background survival (like thread.setDaemon(false)
-        // plus a priority boost — OS will not kill us while this shows).
-        startForeground(1, n);
+        // Android 14+ (Pixel/API 34+) requires explicit foregroundServiceType
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(1, n, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+        } else {
+            startForeground(1, n);
+        }
         // Telemetry: WHAT the user actually sees (or doesn't). If title is
         // still "YTB Web" here, the model never got a real title = bridge dead.
         Telemetry.send("notif", "posted: playing=" + playing,
