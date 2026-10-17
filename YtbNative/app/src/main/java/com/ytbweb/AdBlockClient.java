@@ -181,7 +181,6 @@ public class AdBlockClient extends WebViewClient {
                 + ".ytp-ad-skip-button-modern,.ytp-skip-ad-button-modern,"
                 + "button[class*=\"skip\" i],div[class*=\"skip\" i],[id*=\"skip-button\" i]');"
                 + "if(b){try{b.click();}catch(e){}}"
-                + "if(!isAd&&v&&v.paused&&v.currentTime>0){try{v.play();}catch(e){}}"
                 // 3) Push title + playing state on change
                 + "var vv=document.querySelector('video');"
                 + "var curP=!!vv&&!vv.paused;"

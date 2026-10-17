@@ -394,20 +394,15 @@ public class MainActivity extends Activity implements FullscreenHandler.Host {
         // Must run on UI thread (like SwingUtilities.invokeLater).
         webView.post(() -> webView.evaluateJavascript(
                 "(function(){"
-                // First try: click YouTube's own play/pause button (most reliable)
-                + "var btn=document.querySelector('.ytp-play-button,.ytp-large-play-button');"
-                + "if(btn){btn.click();"
-                + "var v=document.querySelector('#movie_player video,video');"
-                + "return v&&!v.paused?'playing':'paused';}"
-                // Fallback: directly call play/pause on the video element
-                + "var vs=document.querySelectorAll('video');"
-                + "if(!vs.length)return 'no-video';"
-                + "var v=vs[0];"
-                + "for(var i=1;i<vs.length;i++){"
-                + "if(vs[i].clientWidth*vs[i].clientHeight>v.clientWidth*v.clientHeight){v=vs[i];}"
+                + "var v=document.querySelector('video');"
+                + "if(!v)return 'no-video';"
+                + "if(v.paused){"
+                + "try{v.play();}catch(e){}"
+                + "return 'playing';"
+                + "}else{"
+                + "try{v.pause();}catch(e){}"
+                + "return 'paused';"
                 + "}"
-                + "if(v.paused){v.play();return 'playing';}"
-                + "else{v.pause();return 'paused';}"
                 + "})();",
                 value -> {
                     // value is JSON-quoted "playing" or "paused"
