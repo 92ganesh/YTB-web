@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Single full-screen WebView = the whole UI.
-     JAVA ANALOGY: one JFrame containing one giant JEditorPane that renders
-     your index.html. No native buttons — all UI comes from your web files. -->
+<!-- Two-card layout: browser card (WebView) + fullscreen card (video overlay).
+     JAVA ANALOGY: CardLayout("browser") default; FullscreenHandler flips to
+     CardLayout("video") by filling fullscreenContainer with YouTube's view. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
@@ -12,5 +12,14 @@
         android:id="@+id/webview"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
+
+    <!-- Fullscreen card: GONE until YouTube requests fullscreen. Black bg so
+         letterboxed video blends in (like setBackground(Color.BLACK)). -->
+    <FrameLayout
+        android:id="@+id/fullscreenContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#000000"
+        android:visibility="gone" />
 
 </FrameLayout>

@@ -26,7 +26,7 @@ import android.webkit.WebSettings;
   browser); only exits when no history left. Pull-to-refresh NOT included —
   use YouTube's own UI. Desktop-mode toggle lives in the menu (see below).
 ============================================================================= */
-public class MainActivity extends Activity {
+public class MainActivity extends Activity implements FullscreenHandler.Host {
 
     /* -- START PAGE -----------------------------------------------------------
        m.youtube.com = mobile site: fastest, touch-first, designed for phones.
@@ -47,6 +47,7 @@ public class MainActivity extends Activity {
     static boolean isPlaying = false;
     static final NowPlaying nowPlaying = new NowPlaying(); // shared model
     static MainActivity instance = null; // set in onCreate, cleared in onDestroy
+    private FullscreenHandler fullscreen; // owns enter/exit (Back exits first)
 
     // Structured poller: every 2s, re-read the page state and refresh the
     // notification ONLY if something changed (dirty-flag check, not blind).
@@ -95,7 +96,10 @@ public class MainActivity extends Activity {
             }
         });
         webView.setWebViewClient(client);
-        webView.setWebChromeClient(new android.webkit.WebChromeClient());
+        // Fullscreen: replaces the no-op default client that dropped YouTube's
+        // fullscreen requests (the "button does nothing" bug). See class docs.
+        fullscreen = new FullscreenHandler(this);
+        webView.setWebChromeClient(fullscreen);
 
         handleIntent(getIntent()); // shared video? (Share -> YTB Web)
         if (webView.getUrl() == null && savedInstanceState == null) {
@@ -140,14 +144,38 @@ public class MainActivity extends Activity {
         }
     }
 
-    // Phone Back = browser back (like a real browser). Exit only at history root.
+    // Phone Back: fullscreen exits FIRST, then browser back, then app exit.
+    // JAVA: like consuming a KeyEvent at the topmost layer before it bubbles.
     @Override
     public void onBackPressed() {
+        if (fullscreen != null && fullscreen.onBackPressed()) return;
         if (webView != null && webView.canGoBack()) {
             webView.goBack();
         } else {
             super.onBackPressed();
         }
+    }
+
+    // FullscreenHandler.Host contract: expose pieces the handler needs.
+    @Override
+    public android.app.Activity activity() {
+        return this;
+    }
+
+    @Override
+    public android.widget.FrameLayout decorRoot() {
+        return findViewById(R.id.fullscreenContainer);
+    }
+
+    @Override
+    public android.view.View browserView() {
+        return webView;
+    }
+
+    @Override
+    public void onFullscreenChanged(boolean fullscreenOn) {
+        // No-op for now (reserved: pause poller, update menu, etc).
+        // Telemetry already logs ENTER/EXIT from the handler itself.
     }
 
     // 3-dot menu (no XML needed): Home / Diagnostics / Desktop-site / Ping.
