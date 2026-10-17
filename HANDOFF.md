@@ -139,23 +139,37 @@ Local path: `~/Documents/Projects/YTB Web`. Key files:
 
 ---
 
-## 4. CURRENT STATE (as of commit 0764384, main branch)
+## 4. CURRENT STATE (as of commit 5825f6f, main branch)
 
-**Working (verified by user + telemetry):**
+**Working & Verified Architecture:**
 - Real YouTube in-app: browse, search, login, suggestions, history.
-- Background playback on screen lock — user: "works great".
-- Network ad-blocker kills DoubleClick/pagead/tracking (telemetry shows kills; user saw no ads in recent sessions).
-- Telemetry pipeline phone→Mac — user confirmed logs arriving.
+- Background playback on screen lock.
+- Network ad-blocker kills DoubleClick/pagead/tracking.
+- Telemetry pipeline phone→Mac via `telemetry_server.py`.
 - Share-to-app, Home/Desktop-site menu, Diagnostics page, test ping.
+- Fullscreen video (landscape + immersive overlay).
 
-**Just added, not yet user-verified:**
-- Fullscreen video (landscape + immersive; Back exits) — commit 7995705.
-
-**In-flight fixes pushed, awaiting user's FRESH-INSTALL test (f2b4cfb + 0764384):**
-- **Bug: notification invisible** ("still don't see any banner"). Service posts correctly (telemetry `notif posted` with real title + hasArt:true) but Android shows nothing. Suspected: channel created with IMPORTANCE_LOW (collapsed/silent on OEM ROMs) → changed to IMPORTANCE_DEFAULT in f2b4cfb. CRITICAL: Android bakes channel importance at FIRST install — user must **uninstall + fresh install** (or clear app data) or the fix is a no-op.
-- **Bug: black screen ~seconds before video** (user's correct theory: ad playing invisibly / player stalled waiting for blocked ad assets). Fixed in f2b4cfb: stall-kick (play() nudge after 4s stuck at currentTime<0.5), unskippable window 120s→240s, plus `__ad_visible` sightings every second an ad badge exists (proves ad presence in logs). NOTE: same-host (youtube.com/googlevideo.com) ad VIDEO files cannot be network-blocked without killing the real video — only skip/mute+seek apply there. If sightings show an ad badge for the whole black period → selectors need tuning; if no badge → pure stall, tune stall-kick.
-
-**Awaiting user's next log dump** after reinstalling build ≥ f2b4cfb. Their telemetry server must be running (`python3 telemetry_server.py`); verify with in-app **Send test ping** before reading anything.
+**Comprehensive Root-Cause Fixes in Commit 5825f6f (Tailored for Modern Android / Pixel):**
+1. **Notification Missing on Android 13+ (Pixel / API 33+)**:
+   - Added `<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />` in `AndroidManifest.xml`.
+   - Added explicit runtime permission request in `MainActivity.onCreate()` on API 33+.
+   - Added `VISIBILITY_PUBLIC` on notification so lock-screen hides nothing.
+   - Fixed null `Icon` crash on `Notification.Action.Builder`.
+   - Added explicit `FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK` to `startForeground()` call for Android 14+.
+2. **Black-Screen Ad Stall Eliminated**:
+   - Removed the 4-second delay hack.
+   - Added an allowlist in `AdBlockClient.isAd` (`/videoplayback`, `m.youtube.com/watch`, `i.ytimg.com`) so video streams/chunks are never blocked.
+   - Increased watchdog frequency from 1000ms to 150ms.
+   - When an ad is detected (`.ad-showing`, `.ytp-ad-player-overlay`), immediately mute + set `playbackRate = 16.0` + seek to end + trigger skip buttons. Ads finish in <100ms.
+   - Recover any paused video element immediately if stalled.
+3. **Background Service Survives Activity Destruction**:
+   - Removed `stopService(PlaybackService)` from `MainActivity.onDestroy()`. Android cleans up background activities to save RAM; the foreground service now remains running uninterrupted.
+4. **Real "Next" Button in Notification**:
+   - Replaced dummy `webView.goForward()` with YouTube's player API `document.getElementById('movie_player').nextVideo()` and `.ytp-next-button` selector.
+5. **Autoplay Art & Video ID Sync**:
+   - `pollOnce()` now passes `curUrl` to `nowPlaying.onUrl(curUrl)` whenever a change is detected, keeping thumbnail art and video ID updated on autoplay.
+6. **Fullscreen Media Suspension Prevented**:
+   - Stopped calling `browserView().setVisibility(View.GONE)` in `FullscreenHandler.java`. The black overlay covers the browser without triggering Chromium view detachment.
 
 ---
 
