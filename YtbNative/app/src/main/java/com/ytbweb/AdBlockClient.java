@@ -135,12 +135,12 @@ public class AdBlockClient extends WebViewClient {
         return hit;
     }
 
-    // New API (Android 5+): the firewall gate. Empty response = ad dies here.
+    // New API (Android 5+): the firewall gate. 404 response fails fast immediately
+    // so YouTube's player doesn't hang for 8-9s waiting on empty response body.
     @Override
     public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
         if (isAd(request.getUrl().toString())) {
-            // Like `response.setContentLength(0); return;` in a Filter.
-            return new WebResourceResponse("text/plain", "utf-8", new ByteArrayInputStream(EMPTY));
+            return new WebResourceResponse("text/plain", "utf-8", 404, "Not Found", null, new ByteArrayInputStream(EMPTY));
         }
         return super.shouldInterceptRequest(view, request);
     }
@@ -149,7 +149,7 @@ public class AdBlockClient extends WebViewClient {
     @Override
     public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
         if (isAd(url)) {
-            return new WebResourceResponse("text/plain", "utf-8", new ByteArrayInputStream(EMPTY));
+            return new WebResourceResponse("text/plain", "utf-8", 404, "Not Found", null, new ByteArrayInputStream(EMPTY));
         }
         return super.shouldInterceptRequest(view, url);
     }
@@ -171,16 +171,26 @@ public class AdBlockClient extends WebViewClient {
                 + "try{"
                 + "var player=document.querySelector('.html5-video-player,#movie_player');"
                 + "var isAd=(player&&(player.classList.contains('ad-showing')||player.classList.contains('ad-interrupting')))"
-                + "||!!document.querySelector('.ad-showing,.ad-interrupting,[class*=\"ad-showing\" i],.ytp-ad-text');"
+                + "||!!document.querySelector('.ad-showing,.ad-interrupting,[class*=\"ad-showing\" i],.ytp-ad-text,.ytm-ad-badge');"
+                + "if(player&&isAd&&typeof player.skipAd==='function'){try{player.skipAd();}catch(e){}}"
                 + "var v=document.querySelector('video');"
                 + "if(isAd&&v){"
                 + "try{v.muted=true;v.playbackRate=16.0;}catch(e){}"
-                + "try{if(isFinite(v.duration)&&v.duration>0){v.currentTime=v.duration;}}catch(e){}"
+                + "try{"
+                + "if(isFinite(v.duration)&&v.duration>0){v.currentTime=v.duration;}"
+                + "else{v.currentTime=99999;}"
+                + "}catch(e){}"
                 + "}"
                 + "var b=document.querySelector('.ytp-ad-skip-button,.ytp-skip-ad-button,"
-                + ".ytp-ad-skip-button-modern,.ytp-skip-ad-button-modern,"
-                + "button[class*=\"skip\" i],div[class*=\"skip\" i],[id*=\"skip-button\" i]');"
+                + ".ytp-ad-skip-button-modern,.ytp-skip-ad-button-modern,.ytm-skip-ad-button,"
+                + ".ytp-ad-skip-button-slot button,button[class*=\"skip\" i],div[class*=\"skip\" i],[id*=\"skip-button\" i]');"
                 + "if(b){try{b.click();}catch(e){}}"
+                // Prune any scheduled ad placements from player data
+                + "try{"
+                + "var r=window.ytInitialPlayerResponse;"
+                + "if(r&&(r.adPlacements||r.playerAds||r.adSlots)){"
+                + "r.adPlacements=[];r.playerAds=[];r.adSlots=[];}"
+                + "}catch(e){}"
                 // 3) Push title + playing state on change
                 + "var vv=document.querySelector('video');"
                 + "var curP=!!vv&&!vv.paused;"
