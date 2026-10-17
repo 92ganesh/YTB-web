@@ -33,7 +33,7 @@ public class MainActivity extends Activity {
        Your old custom page is still reachable via DEV_URL for testing the
        bundled-vs-server switch, but YouTube is now the default home. */
     private static final String HOME_URL = "https://m.youtube.com";
-    private static final String DEV_URL = "http://192.168.1.35:8000";
+    private static final String DEV_URL = "http://192.168.1.34:8000";
     // private static final String START_URL = "file:///android_asset/www/index.html";
 
     // Set true to open your custom page instead of YouTube (dev/testing).
@@ -86,6 +86,12 @@ public class MainActivity extends Activity {
             webView.loadUrl(startUrl());
         }
         startPlaybackService(); // "do not kill me" notification
+        // Telemetry self-test: ONE ping at startup proves the whole pipeline
+        // (queue -> network -> Mac server). If this line never appears on the
+        // Mac, the endpoint IP is stale or the server isn't running — check
+        // `ipconfig getifaddr en0` on the Mac. (Like a @PostConstruct log line
+        // confirming your appender reached its collector.)
+        Telemetry.send("nav", "app started: " + startUrl());
     }
 
     // New intent while running (singleTask not set, but SEND may re-deliver).
@@ -127,11 +133,12 @@ public class MainActivity extends Activity {
         }
     }
 
-    // 3-dot menu (no XML needed): Home / Diagnostics / Desktop-site toggle.
+    // 3-dot menu (no XML needed): Home / Diagnostics / Desktop-site / Ping.
     // JAVA: like building a JMenuBar in code instead of a .form file.
     private static final int MENU_HOME = 1;
     private static final int MENU_DIAG = 2;
     private static final int MENU_DESKTOP = 3;
+    private static final int MENU_PING = 4;
     private boolean desktopMode = false;
 
     @Override
@@ -139,6 +146,7 @@ public class MainActivity extends Activity {
         menu.add(0, MENU_HOME, 0, "Home");
         menu.add(0, MENU_DIAG, 1, "YTB Diagnostics");
         menu.add(0, MENU_DESKTOP, 2, "Desktop site: OFF");
+        menu.add(0, MENU_PING, 3, "Send test ping");
         return true;
     }
 
@@ -149,11 +157,18 @@ public class MainActivity extends Activity {
         if (id == MENU_HOME) {
             webView.loadUrl(HOME_URL);
             return true;
+        } else if (id == MENU_PING) {
+            // Manual telemetry check: watch the Mac terminal — a "test ping"
+            // line must appear within ~2s. If not, endpoint IP is stale.
+            Telemetry.send("nav", "test ping (manual, from menu)");
+            android.widget.Toast.makeText(this,
+                    "Ping sent — check Mac terminal", android.widget.Toast.LENGTH_SHORT).show();
+            return true;
         } else if (id == MENU_DIAG) {
             // diag.html is bundled? No — served from DEV server in dev mode.
             // In FINAL mode copy diag.html to assets/www too (see README).
             webView.loadUrl(USE_DEV_PAGE ? DEV_URL + "/diag.html"
-                    : "http://192.168.1.35:8000/diag.html");
+                    : "http://192.168.1.34:8000/diag.html");
             return true;
         } else if (id == MENU_DESKTOP) {
             // Desktop UA = youtube.com desktop layout (some users prefer it;

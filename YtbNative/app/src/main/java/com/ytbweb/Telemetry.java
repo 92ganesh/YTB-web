@@ -27,7 +27,9 @@ public final class Telemetry {
 
     // DEV server endpoint (same Mac, port 8081 so it never collides with the
     // :8000 file server). FINAL mode: posts fail fast and are dropped.
-    private static final String ENDPOINT = "http://192.168.1.35:8081/log";
+    // NOTE 2026-10-17: Mac DHCP moved 192.168.1.35 -> .34; endpoint follows.
+    // If logs stop again, run `ipconfig getifaddr en0` on the Mac and update.
+    private static final String ENDPOINT = "http://192.168.1.34:8081/log";
 
     private static final int QUEUE_CAP = 500;
     private static final int BATCH_MAX = 50;
