@@ -73,7 +73,13 @@ public class AdBlockClient extends WebViewClient {
             "taboola.com"
     ));
 
-    // Path/substring rules: catch endpoints like /api/stats/ads, pagead, VAST...
+    // Path/substring rules: ONLY 3rd-party tracker endpoints.
+    // DO NOT add "vast", "vmap", or "/ad_break" here — those match YouTube's
+    // own ad manifest URLs served from youtube.com. Blocking them causes
+    // YouTube's player to enter an unrecoverable stall = black screen.
+    // Video ads come from googlevideo.com/videoplayback (same as real video)
+    // and CANNOT be blocked without breaking playback. The JS watchdog
+    // handles them by muting + 16x speed + clicking skip instead.
     private static final String[] BLOCKED_SUBSTRINGS = {
             "/api/stats/ads",
             "pagead",
@@ -86,9 +92,6 @@ public class AdBlockClient extends WebViewClient {
             ".innovid.",
             "freewheel",
             "springserve",
-            "vast",
-            "vmap",
-            "/ad_break",
             "adservice"
     };
 

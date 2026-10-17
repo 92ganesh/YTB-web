@@ -42,6 +42,14 @@ public class PlaybackService extends Service {
     private Bitmap trackArt = null;
     private boolean playing = true;
 
+    // Track whether startForeground() has been called already.
+    // JAVA: like a flag for "has SwingWorker.execute() already been called?".
+    // startForeground() must be called ONCE to register the foreground service.
+    // Subsequent notification updates use NotificationManager.notify() which
+    // is SILENT — no alert sound on every title/thumb change. This is the fix
+    // for the continuous notification ding while a video is playing.
+    private boolean isForegroundStarted = false;
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -100,8 +108,12 @@ public class PlaybackService extends Service {
 
     // Build + (re)post the media notification with current cached state.
     private void postNotification() {
-        // Tap body -> reopen the app (like clicking a tray icon).
+        // Tap body -> resume the existing app task, NOT create a new MainActivity.
+        // FLAG_ACTIVITY_SINGLE_TOP: if MainActivity is at top, call onNewIntent, don't recreate.
+        // FLAG_ACTIVITY_CLEAR_TOP: if buried in back stack, bring to front and clear above it.
+        // JAVA: like JFrame.toFront() instead of new JFrame().
         Intent open = new Intent(this, MainActivity.class);
+        open.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent openPi = PendingIntent.getActivity(
                 this, 0, open, pendingFlags());
 
@@ -142,6 +154,7 @@ public class PlaybackService extends Service {
                     .addAction(act)
                     .addAction(nextAct)
                     .setVisibility(Notification.VISIBILITY_PUBLIC)
+                    .setOnlyAlertOnce(true) // CRITICAL: no ding/buzz on every update
                     .setOngoing(playing); // ongoing = swipe-proof while playing
             if (trackArt != null) b.setLargeIcon(trackArt); // video thumbnail!
 
@@ -157,19 +170,28 @@ public class PlaybackService extends Service {
                     .setContentIntent(openPi)
                     .addAction(toggleIcon, toggleLabel, togglePi)
                     .addAction(android.R.drawable.ic_media_next, "Next", nextPi)
+                    .setOnlyAlertOnce(true)
                     .setOngoing(playing);
             if (trackArt != null) b.setLargeIcon(trackArt);
             n = b.build();
         }
 
-        // Android 14+ (Pixel/API 34+) requires explicit foregroundServiceType
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(1, n, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+        // startForeground() ONCE to register the service with Android.
+        // All subsequent updates use NotificationManager.notify() which is
+        // completely silent — no alert sound, no vibration. This fixes the
+        // continuous notification ding every time title or art changes.
+        // JAVA: like registering a listener once vs calling addListener() repeatedly.
+        if (!isForegroundStarted) {
+            isForegroundStarted = true;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(1, n, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+            } else {
+                startForeground(1, n);
+            }
         } else {
-            startForeground(1, n);
+            NotificationManager mgr = getSystemService(NotificationManager.class);
+            if (mgr != null) mgr.notify(1, n);
         }
-        // Telemetry: WHAT the user actually sees (or doesn't). If title is
-        // still "YTB Web" here, the model never got a real title = bridge dead.
         Telemetry.send("notif", "posted: playing=" + playing,
                 "{\"title\":" + Telemetry.q(trackTitle)
                 + ",\"subtitle\":" + Telemetry.q(trackSubtitle)
