@@ -213,6 +213,11 @@ public class MainActivity extends Activity {
         if (title != null && !title.isEmpty()) {
             nowPlaying.pushState(title, nowPlaying.playing);
         }
+        // Telemetry: navigation trail (which page, what title Java saw).
+        // If url never contains watch?v=, user never reached a video page.
+        Telemetry.send("nav", "update: " + nowPlaying.subtitle,
+                "{\"title\":" + Telemetry.q(nowPlaying.title)
+                + ",\"videoId\":" + Telemetry.q(nowPlaying.videoId == null ? "" : nowPlaying.videoId) + "}");
         Intent u = new Intent(this, PlaybackService.class);
         u.setAction(PlaybackService.ACTION_UPDATE);
         u.putExtra("title", nowPlaying.title);

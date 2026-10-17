@@ -116,9 +116,12 @@ public class AdBlockClient extends WebViewClient {
                 if (lower.contains(sub)) { hit = true; break; }
             }
         }
-        // Logcat trail: `adb logcat | grep ADBLOCK` shows every kill.
+        // Logcat trail + live server trail (grep ADBLOCK / watch telemetry).
         // When an ad slips through, its host is the one NOT in this log.
-        if (hit) android.util.Log.d("ADBLOCK", "blocked: " + url);
+        if (hit) {
+            android.util.Log.d("ADBLOCK", "blocked: " + url);
+            Telemetry.send("adblock", "blocked: " + url);
+        }
         return hit;
     }
 
@@ -170,14 +173,16 @@ public class AdBlockClient extends WebViewClient {
                 + "var b=document.querySelector('.ytp-ad-skip-button,.ytp-skip-ad-button,"
                 + ".ytp-ad-skip-button-modern,.ytp-skip-ad-button-modern,"
                 + "button[class*=\"skip\" i],div[class*=\"skip\" i]');"
-                + "if(b&&(b.offsetParent!==null)){b.click();}"
+                + "if(b&&(b.offsetParent!==null)){b.click();"
+                + "try{if(window.YtbNative){window.YtbNative.pushState('__skip_clicked',true);}}catch(e){}}"
                 // 2b) unskippable ad? Same <video> plays it: ad badge + short clip.
                 + "var adBadge=document.querySelector('.ytp-ad-text,.ytp-ad-duration-remaining,"
                 + ".ytp-ad-player-overlay,[class*=\"ad-showing\" i]');"
                 + "var v=document.querySelector('#movie_player video,video');"
                 + "if(adBadge&&v&&isFinite(v.duration)&&v.duration>0&&v.duration<120){"
                 + "try{v.muted=true;}catch(e){}"
-                + "try{if(v.currentTime<v.duration-1.5){v.currentTime=v.duration-0.5;}}catch(e){}"
+                + "try{if(v.currentTime<v.duration-1.5){v.currentTime=v.duration-0.5;"
+                + "if(window.YtbNative){window.YtbNative.pushState('__ad_seek',true);}}}catch(e){}"
                 + "}"
                 // 3) push title + playing state to Java (fills notification!)
                 + "try{"

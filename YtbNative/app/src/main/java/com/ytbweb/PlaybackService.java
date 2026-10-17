@@ -145,6 +145,12 @@ public class PlaybackService extends Service {
         // THE call that grants background survival (like thread.setDaemon(false)
         // plus a priority boost — OS will not kill us while this shows).
         startForeground(1, n);
+        // Telemetry: WHAT the user actually sees (or doesn't). If title is
+        // still "YTB Web" here, the model never got a real title = bridge dead.
+        Telemetry.send("notif", "posted: playing=" + playing,
+                "{\"title\":" + Telemetry.q(trackTitle)
+                + ",\"subtitle\":" + Telemetry.q(trackSubtitle)
+                + ",\"hasArt\":" + (trackArt != null) + "}");
     }
 
     @Override

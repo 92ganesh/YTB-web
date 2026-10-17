@@ -38,12 +38,25 @@ public class NowPlaying {
         setters) so the service thread always sees fresh values. */
     @JavascriptInterface
     public void pushState(String pageTitle, boolean isPlaying) {
+        // Sentinel events from the ad watchdog (not real titles — report, don't store).
+        if ("__skip_clicked".equals(pageTitle)) {
+            Telemetry.send("js", "skip button CLICKED by watchdog");
+            return;
+        }
+        if ("__ad_seek".equals(pageTitle)) {
+            Telemetry.send("js", "unskippable ad SEEK (muted + jumped to end)");
+            return;
+        }
         if (!TextUtils.isEmpty(pageTitle)) {
             // YouTube titles come as "Video Name - YouTube"; strip the suffix.
             String clean = pageTitle.replaceAll("\\s*-\\s*YouTube\\s*$", "").trim();
             if (!clean.isEmpty()) title = clean;
         }
         playing = isPlaying;
+        // Telemetry: every bridge push = proof the JS watchdog is alive AND
+        // the bridge object is registered. If these stop, injection died.
+        Telemetry.send("js", "pushState: playing=" + isPlaying,
+                "{\"title\":" + Telemetry.q(title) + "}");
     }
 
     /** Called from Java on every page load / URL change (fallback + art). */
