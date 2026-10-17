@@ -47,16 +47,30 @@ public class NowPlaying {
             Telemetry.send("js", "unskippable ad SEEK (muted + jumped to end)");
             return;
         }
+        boolean titleChanged = false;
         if (!TextUtils.isEmpty(pageTitle)) {
             // YouTube titles come as "Video Name - YouTube"; strip the suffix.
             String clean = pageTitle.replaceAll("\\s*-\\s*YouTube\\s*$", "").trim();
-            if (!clean.isEmpty()) title = clean;
+            if (!clean.isEmpty() && !clean.equals(title)) {
+                title = clean;
+                titleChanged = true;
+            }
         }
+        boolean stateChanged = (playing != isPlaying);
         playing = isPlaying;
         // Telemetry: every bridge push = proof the JS watchdog is alive AND
         // the bridge object is registered. If these stop, injection died.
         Telemetry.send("js", "pushState: playing=" + isPlaying,
                 "{\"title\":" + Telemetry.q(title) + "}");
+        // INSTANT notification: bridge push = fresh truth from the page, so
+        // tell the service NOW instead of waiting for the 2s poller. This is
+        // the fix for "video plays but notification stays empty".
+        // JAVA: property-change listener that repaints immediately on event.
+        if ((titleChanged || stateChanged) && MainActivity.instance != null) {
+            try {
+                MainActivity.instance.pushToServiceNow();
+            } catch (Exception ignored) { }
+        }
     }
 
     /** Called from Java on every page load / URL change (fallback + art). */

@@ -46,13 +46,29 @@ public class MainActivity extends Activity {
     static KeepAliveWebView webView; // static so ActionReceiver can reach it
     static boolean isPlaying = false;
     static final NowPlaying nowPlaying = new NowPlaying(); // shared model
+    static MainActivity instance = null; // set in onCreate, cleared in onDestroy
 
-    // Debounce: don't spam the service with an UPDATE per keystroke.
-    private long lastUpdateSent = 0;
+    // Structured poller: every 2s, re-read the page state and refresh the
+    // notification ONLY if something changed (dirty-flag check, not blind).
+    // JAVA: like a ScheduledExecutorService polling a model for dirty flags.
+    private final android.os.Handler pollHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private String lastPushedTitle = "";
+    private boolean lastPushedPlaying = false;
+    private String lastPushedVideoId = "";
+    private final Runnable pollTask = new Runnable() {
+        @Override
+        public void run() {
+            try {
+                pollOnce();
+            } catch (Exception ignored) { }
+            pollHandler.postDelayed(this, 2000);
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        instance = this;
         // activity_main.xml = one full-screen WebView (like new JFrame + add()).
         setContentView(R.layout.activity_main);
 
@@ -92,6 +108,7 @@ public class MainActivity extends Activity {
         // `ipconfig getifaddr en0` on the Mac. (Like a @PostConstruct log line
         // confirming your appender reached its collector.)
         Telemetry.send("nav", "app started: " + startUrl());
+        pollHandler.postDelayed(pollTask, 2000); // start structured poller
     }
 
     // New intent while running (singleTask not set, but SEND may re-deliver).
@@ -187,16 +204,65 @@ public class MainActivity extends Activity {
     }
 
     // Fired on page finish + title/URL change: update model + notification.
-    // v3: ALSO hooks the <video> element directly (play/pause/ended events
-    // push instantly — no waiting for the 1/sec debounce). This is what makes
-    // the notification appear the moment a video starts, and flip Pause/Play.
+    // v4: hookVideoEvents() attaches media listeners for INSTANT push on
+    // play/pause (no waiting). The 2s structured poller (below) covers
+    // everything else by re-reading state and pushing only on CHANGE.
     void onWebPageChanged(String url, String title) {
         nowPlaying.onUrl(url); // video ID + thumbnail URL (fallback path)
         hookVideoEvents();     // media listeners (idempotent per page)
-        long now = System.currentTimeMillis();
-        if (now - lastUpdateSent < 1000) return;
-        lastUpdateSent = now;
-        pushToService(title);
+        pushToService(title);  // immediate attempt (poller dedupes anyway)
+    }
+
+    // Structured poll: ask the page for its CURRENT title + playing state,
+    // compare with last pushed values, and refresh the notification ONLY on
+    // change. This replaces the old blind 1/sec debounce (which dropped
+    // rapid play/pause flips) and guarantees eventual consistency even if a
+    // bridge push was lost (new video loaded while screen locked, etc).
+    // JAVA: dirty-flag check before repaint — skip work when model unchanged.
+    private void pollOnce() {
+        if (webView == null) return;
+        // Delimiter "|||" separates title from state. Titles never contain
+        // it in practice; even if one did, worst case = one extra refresh.
+        final String pollJs = "(function(){"
+                + "var vv=document.querySelector('#movie_player video,video');"
+                + "var t='';try{t=document.title||'';}catch(e){}"
+                + "var p=false;try{p=!!vv&&!vv.paused;}catch(e){}"
+                + "return t+'|||'+(p?'1':'0');"
+                + "})();";
+        try {
+            webView.evaluateJavascript(pollJs, value -> {
+                try {
+                    if (value == null) return;
+                    // evaluateJavascript wraps strings in JSON quotes.
+                    String unquoted = value;
+                    if (unquoted.length() >= 2 && unquoted.startsWith("\"")
+                            && unquoted.endsWith("\"")) {
+                        unquoted = unquoted.substring(1, unquoted.length() - 1);
+                    }
+                    int sep = unquoted.lastIndexOf("|||");
+                    if (sep < 0) return;
+                    String title = unquoted.substring(0, sep);
+                    boolean playing = unquoted.substring(sep + 3).startsWith("1");
+                    String curUrl = webView.getUrl();
+                    String vid = "";
+                    if (curUrl != null) {
+                        String found = NowPlaying.extractId(curUrl);
+                        if (found != null) vid = found;
+                    }
+                    boolean changed = !title.equals(lastPushedTitle)
+                            || playing != lastPushedPlaying
+                            || !vid.equals(lastPushedVideoId);
+                    if (changed) {
+                        lastPushedTitle = title;
+                        lastPushedPlaying = playing;
+                        lastPushedVideoId = vid;
+                        isPlaying = playing;
+                        nowPlaying.playing = playing;
+                        pushToService(title);
+                    }
+                } catch (Exception ignored) { }
+            });
+        } catch (Exception ignored) { }
     }
 
     // Attach play/pause/ended listeners to the page's <video> (once per page).
@@ -233,6 +299,22 @@ public class MainActivity extends Activity {
         Telemetry.send("nav", "update: " + nowPlaying.subtitle,
                 "{\"title\":" + Telemetry.q(nowPlaying.title)
                 + ",\"videoId\":" + Telemetry.q(nowPlaying.videoId == null ? "" : nowPlaying.videoId) + "}");
+        sendUpdateToService();
+    }
+
+    // Immediate path used by the JS bridge (NowPlaying.pushState) when fresh
+    // truth arrives: skip debounce bookkeeping, just sync + notify.
+    void pushToServiceNow() {
+        try {
+            if (webView != null && webView.getUrl() != null) {
+                nowPlaying.onUrl(webView.getUrl());
+            }
+        } catch (Exception ignored) { }
+        sendUpdateToService();
+    }
+
+    // Shared intent builder: model -> PlaybackService ACTION_UPDATE.
+    private void sendUpdateToService() {
         Intent u = new Intent(this, PlaybackService.class);
         u.setAction(PlaybackService.ACTION_UPDATE);
         u.putExtra("title", nowPlaying.title);
@@ -248,6 +330,8 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        pollHandler.removeCallbacks(pollTask); // stop poller (avoid leaks)
+        instance = null;
         stopService(new Intent(this, PlaybackService.class));
         super.onDestroy();
     }
