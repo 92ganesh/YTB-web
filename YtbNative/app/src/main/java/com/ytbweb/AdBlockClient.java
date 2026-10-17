@@ -176,14 +176,35 @@ public class AdBlockClient extends WebViewClient {
                 + "if(b&&(b.offsetParent!==null)){b.click();"
                 + "try{if(window.YtbNative){window.YtbNative.pushState('__skip_clicked',true);}}catch(e){}}"
                 // 2b) unskippable ad? Same <video> plays it: ad badge + short clip.
+                // v4: ALSO report mere PRESENCE every second (badge sighting),
+                // so the Mac log proves "ad is on screen right now" even when
+                // the badge markup changes and the seek misses. Sightings let
+                // us tune selectors without guessing.
                 + "var adBadge=document.querySelector('.ytp-ad-text,.ytp-ad-duration-remaining,"
                 + ".ytp-ad-player-overlay,[class*=\"ad-showing\" i]');"
                 + "var v=document.querySelector('#movie_player video,video');"
-                + "if(adBadge&&v&&isFinite(v.duration)&&v.duration>0&&v.duration<120){"
+                + "if(adBadge){try{if(window.YtbNative){window.YtbNative.pushState('__ad_visible',true);}}catch(e){}}"
+                + "if(adBadge&&v&&isFinite(v.duration)&&v.duration>0&&v.duration<240){"
                 + "try{v.muted=true;}catch(e){}"
                 + "try{if(v.currentTime<v.duration-1.5){v.currentTime=v.duration-0.5;"
                 + "if(window.YtbNative){window.YtbNative.pushState('__ad_seek',true);}}}catch(e){}"
                 + "}"
+                // 2c) BLACK-SCREEN wait (your bug #1): video stalled at time 0
+                // with no badge and no skip button = ad assets blocked at
+                // network layer but player still waiting on them. Nudge it:
+                // a tiny seek kick-starts stalled players (like pressing
+                // >>| once). Bounded: only when duration unknown/short and
+                // playback hasn't progressed after page settled.
+                + "try{"
+                + "var pv=document.querySelector('#movie_player video,video');"
+                + "if(pv&&pv.readyState<3&&pv.currentTime<0.5){"
+                + "if(!window._ytbStallT){window._ytbStallT=Date.now();}"
+                + "if(Date.now()-window._ytbStallT>4000&&Date.now()-window._ytbStallT<30000){"
+                + "try{pv.play();}catch(e){}"
+                + "if(window.YtbNative){window.YtbNative.pushState('__stall_kick',true);}"
+                + "window._ytbStallT=0;"
+                + "}}else{window._ytbStallT=0;}"
+                + "}catch(e){}"
                 // 3) push title + playing state to Java (fills notification!)
                 + "try{"
                 + "var vv=document.querySelector('#movie_player video,video');"

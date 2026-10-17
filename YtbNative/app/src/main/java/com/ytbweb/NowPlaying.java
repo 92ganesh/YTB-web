@@ -47,6 +47,17 @@ public class NowPlaying {
             Telemetry.send("js", "unskippable ad SEEK (muted + jumped to end)");
             return;
         }
+        if ("__ad_visible".equals(pageTitle)) {
+            // Presence sighting, 1/sec while an ad badge is on screen. Rate
+            // note: these are chatty by design during ads only (badge gone =
+            // sightings stop). Proves "ad was showing" even when seek misses.
+            Telemetry.send("js", "ad badge VISIBLE on screen");
+            return;
+        }
+        if ("__stall_kick".equals(pageTitle)) {
+            Telemetry.send("js", "stalled player KICKED (black-screen nudge)");
+            return;
+        }
         boolean titleChanged = false;
         if (!TextUtils.isEmpty(pageTitle)) {
             // YouTube titles come as "Video Name - YouTube"; strip the suffix.

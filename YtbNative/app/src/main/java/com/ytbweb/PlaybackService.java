@@ -128,7 +128,12 @@ public class PlaybackService extends Service {
                     .addAction(act)
                     .setOngoing(playing); // ongoing = swipe-proof while playing
             if (trackArt != null) b.setLargeIcon(trackArt); // video thumbnail!
-            b.setStyle(new Notification.MediaStyle()); // lock-screen art layout
+            // MediaStyle WITHOUT a MediaSession token still renders the media
+            // template (big art + lock-screen placement) on most ROMs. A null
+            // token is legal — setMediaSession(null) is simply skipped here.
+            // (Full MediaSession wiring is the v5 upgrade: real lock-screen
+            // transport controls driven by the OS instead of our receiver.)
+            b.setStyle(new Notification.MediaStyle());
             n = b.build();
         } else {
             Notification.Builder b = new Notification.Builder(this)
@@ -161,10 +166,17 @@ public class PlaybackService extends Service {
 
     private void createChannel() {
         // Notification channels exist only on Android 8+ (like log categories).
+        // v4: IMPORTANCE_DEFAULT (was LOW). LOW hides the banner/sound AND —
+        // on several OEM ROMs — collapses media notifications to a tiny row
+        // or nothing at all. DEFAULT shows the heads-up banner + lock-screen
+        // card while staying quiet-ish. Channel importance is SET ONCE per
+        // install: if the user installed earlier, they must CLEAR APP DATA
+        // (or reinstall) for the new importance to take effect — Android
+        // ignores re-creation with different importance (documented behavior).
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel ch = new NotificationChannel(
                     CHANNEL_ID, "YTB Web playback",
-                    NotificationManager.IMPORTANCE_LOW); // low = silent, no buzz
+                    NotificationManager.IMPORTANCE_DEFAULT); // banner visible!
             ch.setDescription("Keeps YTB Web playing in background");
             NotificationManager mgr = getSystemService(NotificationManager.class);
             if (mgr != null) mgr.createNotificationChannel(ch);
