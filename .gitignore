@@ -9,3 +9,5 @@ app/release/
 YtbNative/app/build/
 **/build/
 gradle/wrapper/gradle-wrapper.jar
+*.log
+telemetry.log
