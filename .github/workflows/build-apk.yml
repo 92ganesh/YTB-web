@@ -5,10 +5,13 @@ name: Build debug APK
 on:
   push:
     branches: ['**']
+    tags: ['v*']
   workflow_dispatch:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - name: Set up JDK 17
@@ -66,6 +69,32 @@ jobs:
         with:
           name: YTB-Web-debug-apk
           path: YtbNative/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: YtbNative/app/build/outputs/apk/debug/app-debug.apk
+          name: YTB Web ${{ github.ref_name }}
+          body: |
+            ## YTB Web ${{ github.ref_name }}
+            
+            Personal ad-free YouTube player for Android with background playback and lock-screen controls.
+            
+            ### What's New in v1.0
+            - **Background Playback**: Audio continues playing smoothly when the screen locks or when switching apps.
+            - **Instant Ad Skip**: Mutes, fast-forwards (16x speed), and skips video ads instantly; hides banner/feed ads.
+            - **Persistent Media Notification**: Real-time video title, thumbnail art, play/pause and next controls.
+            - **Fullscreen Support**: Landscape fullscreen video with clean back-button transitions.
+            - **Pixel / Android 13+ Compliance**: Full runtime notification permission and foreground service compatibility.
+            - **Zero Tracking**: No Firebase, no third-party telemetry.
+            
+            ### Installation
+            1. Download `app-debug.apk` attached below.
+            2. Install on your Android phone.
+            3. On first launch, tap **Allow** when prompted for notification permissions.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Fresh-slate telemetry: every APK build archives the previous run's log
       # (telemetry.log -> telemetry-<run>.log) so the next install starts from
