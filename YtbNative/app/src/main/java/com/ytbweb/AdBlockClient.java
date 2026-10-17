@@ -99,12 +99,15 @@ public class AdBlockClient extends WebViewClient {
 
     private boolean isAd(String url) {
         if (url == null) return false;
-        // Whitelist: never block the actual video stream, watch page, or thumbnails
-        if (url.contains("/videoplayback") || url.contains("m.youtube.com/watch")
-                || url.contains("i.ytimg.com") || url.contains("/api/stats/playback")) {
-            return false;
-        }
         String lower = url.toLowerCase();
+        // Never break YouTube's internal APIs or streaming chunks with network blocks:
+        if (lower.contains("/videoplayback") || lower.contains("m.youtube.com")
+                || lower.contains("www.youtube.com") || lower.contains("i.ytimg.com")
+                || lower.contains("/api/stats/playback")) {
+            if (!lower.contains("ads.youtube.com")) {
+                return false;
+            }
+        }
         boolean hit = false;
         // 1) host suffix match.
         try {
@@ -125,7 +128,6 @@ public class AdBlockClient extends WebViewClient {
             }
         }
         // Logcat trail + live server trail (grep ADBLOCK / watch telemetry).
-        // When an ad slips through, its host is the one NOT in this log.
         if (hit) {
             android.util.Log.d("ADBLOCK", "blocked: " + url);
             Telemetry.send("adblock", "blocked: " + url);
@@ -152,58 +154,36 @@ public class AdBlockClient extends WebViewClient {
         return super.shouldInterceptRequest(view, url);
     }
 
-    // DOM layer: inject CSS hiding + instant 150ms ad watchdog (skip button clicking,
-    // mute+speedup unskippable ads, recover stalled state, push state to notification).
+    // DOM layer: clean banner hiding + instant 100ms video-ad fast-forward & skip
     @Override
     public void onPageFinished(WebView view, String url) {
         super.onPageFinished(view, url);
         String js = "(function(){"
                 + "try{"
-                // 1) hide ad containers (head-null-safe for redirect stubs)
-                + "var css='.ytp-ad-module,.video-ads,.ytp-ad-overlay-container,"
-                + ".ytp-ad-text-overlay,.ytp-ad-player-overlay,#player-ads,"
-                + ".ad-container,.ad-div,.masthead-ad{display:none!important}';"
+                // 1) Hide banner / feed ads without hiding video overlays / skip buttons
+                + "var css='.ytp-ad-overlay-container,#player-ads,.ad-container,.ad-div,"
+                + ".masthead-ad,ytm-promoted-sparkles-web-renderer,ytm-promoted-video-renderer{display:none!important}';"
                 + "if(document.head){"
                 + "var st=document.createElement('style');"
                 + "st.textContent=css;document.head.appendChild(st);}"
-                // 2) Fast 150ms watchdog per page (instant ad-skip, zero black-screen stall)
+                // 2) Fast 100ms watchdog
                 + "if(!window._ytbSkip){window._ytbSkip=setInterval(function(){"
                 + "try{"
-                // 2a) click ANY skip button variant immediately
+                + "var player=document.querySelector('.html5-video-player,#movie_player');"
+                + "var isAd=(player&&(player.classList.contains('ad-showing')||player.classList.contains('ad-interrupting')))"
+                + "||!!document.querySelector('.ad-showing,.ad-interrupting,[class*=\"ad-showing\" i],.ytp-ad-text');"
+                + "var v=document.querySelector('video');"
+                + "if(isAd&&v){"
+                + "try{v.muted=true;v.playbackRate=16.0;}catch(e){}"
+                + "try{if(isFinite(v.duration)&&v.duration>0){v.currentTime=v.duration;}}catch(e){}"
+                + "}"
                 + "var b=document.querySelector('.ytp-ad-skip-button,.ytp-skip-ad-button,"
                 + ".ytp-ad-skip-button-modern,.ytp-skip-ad-button-modern,"
                 + "button[class*=\"skip\" i],div[class*=\"skip\" i],[id*=\"skip-button\" i]');"
-                + "if(b&&(b.offsetParent!==null)){b.click();"
-                + "try{if(window.YtbNative){window.YtbNative.pushState('__skip_clicked',true);}}catch(e){}}"
-                // 2b) Ad active? Mute + 16x speedup + jump to end instantly
-                + "var adBadge=document.querySelector('.ad-showing,.ad-interrupting,"
-                + ".ytp-ad-player-overlay,.ytp-ad-text,.ytp-ad-duration-remaining,[class*=\"ad-showing\" i]');"
-                + "var v=document.querySelector('#movie_player video,video');"
-                + "if(adBadge){"
-                + "try{if(window.YtbNative){window.YtbNative.pushState('__ad_visible',true);}}catch(e){}"
-                + "if(v){"
-                + "try{v.muted=true;v.playbackRate=16.0;}catch(e){}"
-                + "try{if(isFinite(v.duration)&&v.duration>0&&v.currentTime<v.duration-0.2){"
-                + "v.currentTime=v.duration-0.1;"
-                + "if(window.YtbNative){window.YtbNative.pushState('__ad_seek',true);}"
-                + "}}catch(e){}"
-                + "}"
-                + "}"
-                // 2c) Stall-kick: player stuck at readyState<3 for 500ms = ad assets blocked.
-                // MUST check currentTime<=0.5 (stall always starts at 0).
-                // v.currentTime>0 check was WRONG and caused the 4s black screen bug.
-                + "try{"
-                + "var pv=document.querySelector('#movie_player video,video');"
-                + "if(pv&&pv.readyState<3&&pv.currentTime<=0.5){"
-                + "if(!window._ytbStallT){window._ytbStallT=Date.now();}"
-                + "if(Date.now()-window._ytbStallT>500){"
-                + "try{pv.play();}catch(e){}"
-                + "if(window.YtbNative){window.YtbNative.pushState('__stall_kick',true);}"
-                + "window._ytbStallT=0;"
-                + "}}else{window._ytbStallT=0;}"
-                + "}catch(e){}"
-                // 3) Push title + playing state on change (dirty-check to avoid flooding)
-                + "var vv=document.querySelector('#movie_player video,video');"
+                + "if(b){try{b.click();}catch(e){}}"
+                + "if(!isAd&&v&&v.paused&&v.currentTime>0){try{v.play();}catch(e){}}"
+                // 3) Push title + playing state on change
+                + "var vv=document.querySelector('video');"
                 + "var curP=!!vv&&!vv.paused;"
                 + "var curT=document.title||'';"
                 + "if(window.YtbNative&&(curP!==window._ytbLastP||curT!==window._ytbLastT)){"
@@ -211,10 +191,9 @@ public class AdBlockClient extends WebViewClient {
                 + "try{window.YtbNative.pushState(curT,curP);}catch(e){}"
                 + "}"
                 + "}catch(e){}"
-                + "},150);}"
-                // 4) immediate first push
+                + "},100);}"
                 + "try{"
-                + "var v0=document.querySelector('#movie_player video,video');"
+                + "var v0=document.querySelector('video');"
                 + "if(window.YtbNative){window.YtbNative.pushState(document.title,!!v0&&!v0.paused);}"
                 + "}catch(e){}"
                 + "}catch(e){}"

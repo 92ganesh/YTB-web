@@ -101,6 +101,7 @@ public class FullscreenHandler extends WebChromeClient {
         try {
             FrameLayout root = host.decorRoot();
             if (customView != null) root.removeView(customView);
+            root.setVisibility(View.GONE); // Hide the black overlay so WebView is visible
         } catch (Exception ignored) { }
         customView = null;
         try {
